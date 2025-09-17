@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OmniNet CRM - Demo & Features</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .demo-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .demo-header {
+            text-align: center;
+            color: white;
+            margin-bottom: 3rem;
+        }
+        
+        .demo-header h1 {
+            font-size: 3rem;
+            font-weight: 800;
+            margin-bottom: 1rem;
+            text-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+        
+        .demo-header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            margin-bottom: 2rem;
+        }
+        
+        .demo-cta {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: linear-gradient(135deg, #06b6d4, #22d3ee);
+            color: white;
+            padding: 1rem 2rem;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1.1rem;
+            box-shadow: 0 8px 32px rgba(6, 182, 212, 0.3);
+            transition: all 0.3s ease;
+        }
+        
+        .demo-cta:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px rgba(6, 182, 212, 0.4);
+        }
+        
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 2rem;
+            margin-bottom: 3rem;
+        }
+        
+        .feature-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 1.5rem;
+            padding: 2rem;
+            color: white;
+            transition: all 0.3s ease;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-8px);
+            background: rgba(255, 255, 255, 0.15);
+        }
+        
+        .feature-icon {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, #06b6d4, #22d3ee);
+            border-radius: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 8px 32px rgba(6, 182, 212, 0.3);
+        }
+        
+        .feature-card h3 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+        
+        .feature-card p {
+            opacity: 0.9;
+            line-height: 1.6;
+        }
+        
+        .tech-stack {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 1.5rem;
+            padding: 2rem;
+            color: white;
+            margin-bottom: 2rem;
+        }
+        
+        .tech-stack h2 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            text-align: center;
+        }
+        
+        .tech-items {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            justify-content: center;
+        }
+        
+        .tech-item {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 0.75rem 1.5rem;
+            border-radius: 50px;
+            font-weight: 600;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .screenshots {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-top: 2rem;
+        }
+        
+        .screenshot {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            text-align: center;
+            color: white;
+        }
+        
+        .screenshot h4 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+        
+        .screenshot-placeholder {
+            width: 100%;
+            height: 200px;
+            background: linear-gradient(135deg, #1e3a8a, #06b6d4);
+            border-radius: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="demo-container">
+        <div class="demo-header">
+            <h1>OmniNet CRM</h1>
+            <p>Ultra Elite ISP Management Dashboard</p>
+            <a href="index.html" class="demo-cta">
+                <i class="fas fa-rocket"></i>
+                Launch Dashboard
+            </a>
+        </div>
+
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <i class="fas fa-robot"></i>
+                </div>
+                <h3>AI-Powered Automation</h3>
+                <p>Automatic reminders and bulk notifications (email/SMS/WhatsApp) 10 days before plan expiry. Smart churn prediction and revenue optimization.</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+                <h3>Smart Dashboard</h3>
+                <p>Real-time analytics on customers, payments, tickets, plans, and revenue. Interactive charts with smooth animations and responsive design.</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <i class="fas fa-comments"></i>
+                </div>
+                <h3>Omni Messaging Hub</h3>
+                <p>Unified view to send bulk emails, WhatsApp, and SMS directly from the CRM. Template management and delivery tracking.</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <i class="fas fa-table"></i>
+                </div>
+                <h3>Ultra-Functional Tables</h3>
+                <p>Advanced filtering, export capabilities, and validation. Sortable columns, bulk actions, and real-time search functionality.</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <i class="fas fa-layer-group"></i>
+                </div>
+                <h3>Service Plan Manager</h3>
+                <p>Modular service plan management with speed, price, expiry tracking, and AI-suggested upsell plans for revenue growth.</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <i class="fas fa-brain"></i>
+                </div>
+                <h3>AI Assistant Panel</h3>
+                <p>Intelligent business assistant for answering queries, predicting churn, and auto-generating reports with natural language processing.</p>
+            </div>
+        </div>
+
+        <div class="tech-stack">
+            <h2>Technology Stack</h2>
+            <div class="tech-items">
+                <div class="tech-item">HTML5</div>
+                <div class="tech-item">CSS3</div>
+                <div class="tech-item">JavaScript ES6+</div>
+                <div class="tech-item">Chart.js</div>
+                <div class="tech-item">FontAwesome</div>
+                <div class="tech-item">Google Fonts</div>
+                <div class="tech-item">Glassmorphism</div>
+                <div class="tech-item">Responsive Design</div>
+            </div>
+        </div>
+
+        <div class="screenshots">
+            <div class="screenshot">
+                <h4>Dashboard Overview</h4>
+                <div class="screenshot-placeholder">
+                    <i class="fas fa-chart-pie"></i>
+                </div>
+                <p>Real-time analytics and key metrics</p>
+            </div>
+
+            <div class="screenshot">
+                <h4>Customer Management</h4>
+                <div class="screenshot-placeholder">
+                    <i class="fas fa-users"></i>
+                </div>
+                <p>Advanced customer database with filtering</p>
+            </div>
+
+            <div class="screenshot">
+                <h4>AI Assistant</h4>
+                <div class="screenshot-placeholder">
+                    <i class="fas fa-robot"></i>
+                </div>
+                <p>Intelligent business assistant</p>
+            </div>
+
+            <div class="screenshot">
+                <h4>Messaging Hub</h4>
+                <div class="screenshot-placeholder">
+                    <i class="fas fa-comments"></i>
+                </div>
+                <p>Unified communication center</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

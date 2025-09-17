@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OmniNet CRM - Elite ISP Management Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0%' stop-color='%231e3a8a'/><stop offset='100%' stop-color='%2306b6d4'/></linearGradient></defs><rect width='100%' height='100%' rx='12' fill='url(%23g)'/><path d='M20 34c4-6 12-6 16 0' stroke='white' stroke-width='4' fill='none' stroke-linecap='round'/><path d='M14 28c8-10 24-10 32 0' stroke='white' stroke-width='4' fill='none' stroke-linecap='round'/><circle cx='28' cy='38' r='3' fill='white'/></svg>">
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loadingScreen" class="loading-screen">
+        <div class="loading-content">
+            <div class="logo-container">
+                <div class="logo-icon">
+                    <i class="fas fa-wifi"></i>
+                </div>
+                <h1>OmniNet CRM</h1>
+            </div>
+            <div class="loading-spinner"></div>
+        </div>
+    </div>
+
+    <!-- Main App Container -->
+    <div id="app" class="app-container">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <div class="logo-icon">
+                        <i class="fas fa-wifi"></i>
+                    </div>
+                    <span class="logo-text">OmniNet</span>
+                </div>
+                <button class="sidebar-toggle" id="sidebarToggle">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </div>
+
+            <div class="sidebar-menu">
+                <div class="menu-section">
+                    <h3 class="menu-title">Dashboard</h3>
+                    <ul class="menu-list">
+                        <li class="menu-item active" data-page="dashboard">
+                            <i class="fas fa-chart-line"></i>
+                            <span>Overview</span>
+                        </li>
+                        <li class="menu-item" data-page="analytics">
+                            <i class="fas fa-analytics"></i>
+                            <span>Analytics</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="menu-section">
+                    <h3 class="menu-title">Customer Management</h3>
+                    <ul class="menu-list">
+                        <li class="menu-item" data-page="customers">
+                            <i class="fas fa-users"></i>
+                            <span>Customers</span>
+                        </li>
+                        <li class="menu-item" data-page="plans">
+                            <i class="fas fa-layer-group"></i>
+                            <span>Service Plans</span>
+                        </li>
+                        <li class="menu-item" data-page="payments">
+                            <i class="fas fa-credit-card"></i>
+                            <span>Payments</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="menu-section">
+                    <h3 class="menu-title">Communication</h3>
+                    <ul class="menu-list">
+                        <li class="menu-item" data-page="messaging">
+                            <i class="fas fa-comments"></i>
+                            <span>Omni Messaging</span>
+                        </li>
+                        <li class="menu-item" data-page="notifications">
+                            <i class="fas fa-bell"></i>
+                            <span>Notifications</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="menu-section">
+                    <h3 class="menu-title">Support</h3>
+                    <ul class="menu-list">
+                        <li class="menu-item" data-page="tickets">
+                            <i class="fas fa-ticket-alt"></i>
+                            <span>Support Tickets</span>
+                        </li>
+                        <li class="menu-item" data-page="ai-assistant">
+                            <i class="fas fa-robot"></i>
+                            <span>AI Assistant</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="sidebar-footer">
+                <div class="user-profile">
+                    <div class="user-avatar">
+                        <img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40'><rect width='40' height='40' rx='8' fill='%234A90E2'/><text x='20' y='26' text-anchor='middle' font-family='Inter, Arial' font-size='16' fill='white'>JD</text></svg>" alt="User">
+                    </div>
+                    <div class="user-info">
+                        <span class="user-name">John Doe</span>
+                        <span class="user-role">Admin</span>
+                    </div>
+                </div>
+                <button class="logout-btn">
+                    <i class="fas fa-sign-out-alt"></i>
+                </button>
+            </div>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Top Header -->
+            <header class="top-header">
+                <div class="header-left">
+                    <button class="action-btn" id="mobileSidebarToggle" aria-label="Open menu">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <h1 class="page-title" id="pageTitle">Dashboard Overview</h1>
+                    <div class="breadcrumb">
+                        <span>Home</span>
+                        <i class="fas fa-chevron-right"></i>
+                        <span id="breadcrumbCurrent">Dashboard</span>
+                    </div>
+                </div>
+                <div class="header-right">
+                    <div class="search-container">
+                        <input type="text" placeholder="Search customers, plans, tickets..." class="search-input">
+                        <i class="fas fa-search"></i>
+                    </div>
+                    <div class="header-actions">
+                        <button class="action-btn notification-btn">
+                            <i class="fas fa-bell"></i>
+                            <span class="notification-badge">3</span>
+                        </button>
+                        <button class="action-btn settings-btn">
+                            <i class="fas fa-cog"></i>
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Page Content -->
+            <div class="page-content" id="pageContent">
+                <!-- Dashboard Page -->
+                <div class="page active" id="dashboardPage">
+                    <!-- Stats Cards -->
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-users"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3 id="statTotalCustomers">0</h3>
+                                <p>Total Customers</p>
+                                <span class="stat-change positive" id="statCustomerChange">0%</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-dollar-sign"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3 id="statMonthlyRevenue">$0</h3>
+                                <p>Monthly Revenue</p>
+                                <span class="stat-change positive" id="statRevenueChange">0%</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-ticket-alt"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3 id="statOpenTickets">0</h3>
+                                <p>Open Tickets</p>
+                                <span class="stat-change negative" id="statTicketChange">0%</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-wifi"></i>
+                            </div>
+                            <div class="stat-content">
+                                <h3 id="statUptime">0%</h3>
+                                <p>Service Uptime</p>
+                                <span class="stat-change positive" id="statUptimeChange">0%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Charts Section -->
+                    <div class="charts-section">
+                        <div class="chart-container">
+                            <div class="chart-header">
+                                <h3>Revenue Analytics</h3>
+                                <div class="chart-controls">
+                                    <button class="chart-btn active">7D</button>
+                                    <button class="chart-btn">30D</button>
+                                    <button class="chart-btn">90D</button>
+                                </div>
+                            </div>
+                            <div class="chart-content">
+                                <canvas id="revenueChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <div class="chart-header">
+                                <h3>Customer Growth</h3>
+                                <div class="chart-controls">
+                                    <button class="chart-btn active">7D</button>
+                                    <button class="chart-btn">30D</button>
+                                    <button class="chart-btn">90D</button>
+                                </div>
+                            </div>
+                            <div class="chart-content">
+                                <canvas id="customerChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Activity -->
+                    <div class="recent-activity">
+                        <h3>Recent Activity</h3>
+                        <div class="activity-list" id="activityList"></div>
+                    </div>
+                </div>
+
+                <!-- Customers Page -->
+                <div class="page" id="customersPage" style="display: none;">
+                    <div class="page-header">
+                        <h2>Customer Management</h2>
+                        <div class="page-actions">
+                            <button class="btn btn-secondary" id="exportCustomers">
+                                <i class="fas fa-download"></i>
+                                Export
+                            </button>
+                            <button class="btn btn-primary" id="addCustomerBtn">
+                                <i class="fas fa-plus"></i>
+                                Add Customer
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="filters-section">
+                        <div class="filter-group">
+                            <label>Search</label>
+                            <input type="text" placeholder="Search customers..." class="filter-input">
+                        </div>
+                        <div class="filter-group">
+                            <label>Plan</label>
+                            <select class="filter-select">
+                                <option>All Plans</option>
+                                <option>Basic</option>
+                                <option>Premium</option>
+                                <option>Enterprise</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label>Status</label>
+                            <select class="filter-select">
+                                <option>All Status</option>
+                                <option>Active</option>
+                                <option>Inactive</option>
+                                <option>Expired</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>
+                                        <input type="checkbox" class="table-checkbox">
+                                    </th>
+                                    <th>Customer</th>
+                                    <th>Plan</th>
+                                    <th>Status</th>
+                                    <th>Last Payment</th>
+                                    <th>Expiry</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="customersTbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Plans Page -->
+                <div class="page" id="plansPage" style="display: none;">
+                    <div class="page-header">
+                        <h2>Service Plans</h2>
+                        <div class="page-actions">
+                            <button class="btn btn-primary" id="createPlanBtn">
+                                <i class="fas fa-plus"></i>
+                                Create Plan
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="plans-grid" id="plansGrid"></div>
+                </div>
+
+                <!-- Messaging Page -->
+                <div class="page" id="messagingPage" style="display: none;">
+                    <div class="page-header">
+                        <h2>Omni Messaging Hub</h2>
+                        <div class="page-actions">
+                            <button class="btn btn-primary">
+                                <i class="fas fa-plus"></i>
+                                New Campaign
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="messaging-dashboard">
+                        <div class="messaging-stats" id="messagingStats"></div>
+
+                        <div class="messaging-tabs">
+                            <div class="tab-nav">
+                                <button class="tab-btn active" data-tab="email">Email</button>
+                                <button class="tab-btn" data-tab="sms">SMS</button>
+                                <button class="tab-btn" data-tab="whatsapp">WhatsApp</button>
+                            </div>
+
+                            <div class="tab-content">
+                                <div class="tab-panel active" id="emailTab">
+                                    <div class="message-composer">
+                                        <h3>Compose Email</h3>
+                                        <form class="message-form">
+                                            <div class="form-group">
+                                                <label>Recipients</label>
+                                                <select class="form-select" multiple>
+                                                    <option>All Customers</option>
+                                                    <option>Premium Subscribers</option>
+                                                    <option>Expiring Soon</option>
+                                                </select>
+                                            </div>
+                                            <div class="form-group">
+                                                <label>Subject</label>
+                                                <input type="text" class="form-input" placeholder="Enter email subject">
+                                            </div>
+                                            <div class="form-group">
+                                                <label>Message</label>
+                                                <textarea class="form-textarea" rows="6" placeholder="Enter your message"></textarea>
+                                            </div>
+                                            <div class="form-actions">
+                                                <button type="button" class="btn btn-secondary" id="saveEmailDraft">Save Draft</button>
+                                                <button type="submit" class="btn btn-primary">Send Email</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+
+                                <div class="tab-panel" id="smsTab">
+                                    <div class="message-composer">
+                                        <h3>Compose SMS</h3>
+                                        <form class="message-form">
+                                            <div class="form-group">
+                                                <label>Recipients</label>
+                                                <select class="form-select" multiple>
+                                                    <option>All Customers</option>
+                                                    <option>Premium Subscribers</option>
+                                                    <option>Expiring Soon</option>
+                                                </select>
+                                            </div>
+                                            <div class="form-group">
+                                                <label>Message</label>
+                                                <textarea class="form-textarea" rows="4" placeholder="Enter SMS message (160 chars max)"></textarea>
+                                                <div class="char-count">0/160</div>
+                                            </div>
+                                            <div class="form-actions">
+                                                <button type="button" class="btn btn-secondary" id="saveSmsDraft">Save Draft</button>
+                                                <button type="submit" class="btn btn-primary">Send SMS</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+
+                                <div class="tab-panel" id="whatsappTab">
+                                    <div class="message-composer">
+                                        <h3>Compose WhatsApp</h3>
+                                        <form class="message-form">
+                                            <div class="form-group">
+                                                <label>Recipients</label>
+                                                <select class="form-select" multiple>
+                                                    <option>All Customers</option>
+                                                    <option>Premium Subscribers</option>
+                                                    <option>Expiring Soon</option>
+                                                </select>
+                                            </div>
+                                            <div class="form-group">
+                                                <label>Message</label>
+                                                <textarea class="form-textarea" rows="6" placeholder="Enter WhatsApp message"></textarea>
+                                            </div>
+                                            <div class="form-group">
+                                                <label>Media (Optional)</label>
+                                                <input type="file" class="form-input" accept="image/*,video/*,audio/*">
+                                            </div>
+                                            <div class="form-actions">
+                                                <button type="button" class="btn btn-secondary" id="saveWaDraft">Save Draft</button>
+                                                <button type="submit" class="btn btn-primary">Send WhatsApp</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AI Assistant Page -->
+                <div class="page" id="aiAssistantPage" style="display: none;">
+                    <div class="page-header">
+                        <h2>AI Assistant</h2>
+                        <div class="ai-status">
+                            <div class="status-indicator online"></div>
+                            <span>AI Online</span>
+                        </div>
+                    </div>
+
+                    <div class="ai-dashboard">
+                        <div class="ai-chat">
+                            <div class="chat-header">
+                                <div class="ai-avatar">
+                                    <i class="fas fa-robot"></i>
+                                </div>
+                                <div class="ai-info">
+                                    <h3>OmniNet AI Assistant</h3>
+                                    <p>Powered by advanced AI to help with your business queries</p>
+                                </div>
+                            </div>
+
+                            <div class="chat-messages" id="chatMessages">
+                                <div class="message ai-message">
+                                    <div class="message-avatar">
+                                        <i class="fas fa-robot"></i>
+                                    </div>
+                                    <div class="message-content">
+                                        <p>Hello! I'm your AI assistant. I can help you with:</p>
+                                        <ul>
+                                            <li>Customer analytics and insights</li>
+                                            <li>Churn prediction and prevention</li>
+                                            <li>Revenue optimization suggestions</li>
+                                            <li>Automated report generation</li>
+                                            <li>Business intelligence queries</li>
+                                        </ul>
+                                        <p>What would you like to know?</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="chat-input">
+                                <div class="input-container">
+                                    <input type="text" id="chatInput" placeholder="Ask me anything about your business...">
+                                    <button id="sendMessage" class="send-btn">
+                                        <i class="fas fa-paper-plane"></i>
+                                    </button>
+                                </div>
+                                <div class="quick-actions">
+                                    <button class="quick-action-btn" data-query="Show me customer churn analysis">
+                                        <i class="fas fa-chart-line"></i>
+                                        Churn Analysis
+                                    </button>
+                                    <button class="quick-action-btn" data-query="Generate revenue report">
+                                        <i class="fas fa-file-alt"></i>
+                                        Revenue Report
+                                    </button>
+                                    <button class="quick-action-btn" data-query="Predict next month's growth">
+                                        <i class="fas fa-crystal-ball"></i>
+                                        Growth Prediction
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="ai-insights">
+                            <h3>AI Insights</h3>
+                            <div class="insight-card">
+                                <div class="insight-icon">
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                </div>
+                                <div class="insight-content">
+                                    <h4>Churn Risk Alert</h4>
+                                    <p>23 customers are at high risk of churning in the next 30 days. Consider reaching out with retention offers.</p>
+                                </div>
+                            </div>
+                            <div class="insight-card">
+                                <div class="insight-icon">
+                                    <i class="fas fa-trending-up"></i>
+                                </div>
+                                <div class="insight-content">
+                                    <h4>Upsell Opportunity</h4>
+                                    <p>156 customers on Basic plan could be upgraded to Premium. Potential revenue increase: $4,680/month.</p>
+                                </div>
+                            </div>
+                            <div class="insight-card">
+                                <div class="insight-icon">
+                                    <i class="fas fa-calendar"></i>
+                                </div>
+                                <div class="insight-content">
+                                    <h4>Payment Reminder</h4>
+                                    <p>89 customers have payments due in the next 7 days. Send automated reminders to improve collection rate.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Analytics Page -->
+                <div class="page" id="analyticsPage" style="display: none;">
+                    <div class="page-header">
+                        <h2>Analytics & Reports</h2>
+                        <div class="page-actions">
+                            <button class="btn btn-secondary">
+                                <i class="fas fa-download"></i>
+                                Export Report
+                            </button>
+                            <button class="btn btn-primary">
+                                <i class="fas fa-chart-bar"></i>
+                                Generate Report
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="analytics-grid">
+                        <div class="analytics-card">
+                            <h3>Revenue Trends</h3>
+                            <div class="chart-content">
+                                <canvas id="revenueTrendChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="analytics-card">
+                            <h3>Customer Acquisition</h3>
+                            <div class="chart-content">
+                                <canvas id="acquisitionChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="analytics-card">
+                            <h3>Plan Distribution</h3>
+                            <div class="chart-content">
+                                <canvas id="planDistributionChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="analytics-card">
+                            <h3>Churn Analysis</h3>
+                            <div class="chart-content">
+                                <canvas id="churnChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Payments Page -->
+                <div class="page" id="paymentsPage" style="display: none;">
+                    <div class="page-header">
+                        <h2>Payment Management</h2>
+                        <div class="page-actions">
+                            <button class="btn btn-secondary" id="exportPayments">
+                                <i class="fas fa-download"></i>
+                                Export
+                            </button>
+                            <button class="btn btn-primary" id="recordPaymentBtn">
+                                <i class="fas fa-plus"></i>
+                                Record Payment
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="filters-section">
+                        <div class="filter-group">
+                            <label>Search</label>
+                            <input type="text" placeholder="Search payments..." class="filter-input">
+                        </div>
+                        <div class="filter-group">
+                            <label>Status</label>
+                            <select class="filter-select">
+                                <option>All Status</option>
+                                <option>Paid</option>
+                                <option>Pending</option>
+                                <option>Failed</option>
+                                <option>Refunded</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label>Date Range</label>
+                            <input type="date" class="filter-input">
+                        </div>
+                    </div>
+
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Payment ID</th>
+                                    <th>Customer</th>
+                                    <th>Amount</th>
+                                    <th>Method</th>
+                                    <th>Status</th>
+                                    <th>Date</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="paymentsTbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Notifications Page -->
+                <div class="page" id="notificationsPage" style="display: none;">
+                    <div class="page-header">
+                        <h2>Notifications Center</h2>
+                        <div class="page-actions">
+                            <button class="btn btn-secondary">
+                                <i class="fas fa-check-double"></i>
+                                Mark All Read
+                            </button>
+                            <button class="btn btn-primary">
+                                <i class="fas fa-cog"></i>
+                                Settings
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="notifications-grid">
+                        <div class="notification-card">
+                            <div class="notification-icon">
+                                <i class="fas fa-exclamation-triangle"></i>
+                            </div>
+                            <div class="notification-content">
+                                <h4>Payment Failed</h4>
+                                <p>Payment for customer John Doe failed. Amount: $59.99</p>
+                                <span class="notification-time">2 minutes ago</span>
+                            </div>
+                            <div class="notification-actions">
+                                <button class="btn btn-sm btn-primary">Retry</button>
+                                <button class="btn btn-sm btn-secondary">Dismiss</button>
+                            </div>
+                        </div>
+
+                        <div class="notification-card">
+                            <div class="notification-icon">
+                                <i class="fas fa-user-plus"></i>
+                            </div>
+                            <div class="notification-content">
+                                <h4>New Customer</h4>
+                                <p>Sarah Johnson subscribed to Premium Plan</p>
+                                <span class="notification-time">15 minutes ago</span>
+                            </div>
+                            <div class="notification-actions">
+                                <button class="btn btn-sm btn-primary">View</button>
+                                <button class="btn btn-sm btn-secondary">Dismiss</button>
+                            </div>
+                        </div>
+
+                        <div class="notification-card">
+                            <div class="notification-icon">
+                                <i class="fas fa-ticket-alt"></i>
+                            </div>
+                            <div class="notification-content">
+                                <h4>Support Ticket</h4>
+                                <p>New high-priority ticket #1234 from Mike Chen</p>
+                                <span class="notification-time">1 hour ago</span>
+                            </div>
+                            <div class="notification-actions">
+                                <button class="btn btn-sm btn-primary">View</button>
+                                <button class="btn btn-sm btn-secondary">Dismiss</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Support Tickets Page -->
+                <div class="page" id="ticketsPage" style="display: none;">
+                    <div class="page-header">
+                        <h2>Support Tickets</h2>
+                        <div class="page-actions">
+                            <button class="btn btn-secondary">
+                                <i class="fas fa-download"></i>
+                                Export
+                            </button>
+                            <button class="btn btn-primary">
+                                <i class="fas fa-plus"></i>
+                                New Ticket
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="filters-section">
+                        <div class="filter-group">
+                            <label>Search</label>
+                            <input type="text" placeholder="Search tickets..." class="filter-input">
+                        </div>
+                        <div class="filter-group">
+                            <label>Priority</label>
+                            <select class="filter-select">
+                                <option>All Priorities</option>
+                                <option>Low</option>
+                                <option>Medium</option>
+                                <option>High</option>
+                                <option>Critical</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label>Status</label>
+                            <select class="filter-select">
+                                <option>All Status</option>
+                                <option>Open</option>
+                                <option>In Progress</option>
+                                <option>Resolved</option>
+                                <option>Closed</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Ticket ID</th>
+                                    <th>Customer</th>
+                                    <th>Subject</th>
+                                    <th>Priority</th>
+                                    <th>Status</th>
+                                    <th>Assigned To</th>
+                                    <th>Created</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ticketsTbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Floating Action Buttons -->
+    <div class="floating-actions">
+        <button class="fab" id="quickMessage" title="Quick Message">
+            <i class="fas fa-comment"></i>
+        </button>
+        <button class="fab" id="quickAdd" title="Quick Add">
+            <i class="fas fa-plus"></i>
+        </button>
+        <button class="fab" id="quickSearch" title="Quick Search">
+            <i class="fas fa-search"></i>
+        </button>
+    </div>
+
+    <!-- CRUD Modal -->
+    <div id="crudModal" class="modal" style="display:none;">
+        <div class="modal-backdrop"></div>
+        <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+            <div class="modal-header">
+                <h3 id="modalTitle">Modal</h3>
+                <button id="modalClose" class="modal-close" aria-label="Close"><i class="fas fa-times"></i></button>
+            </div>
+            <form id="modalForm" class="modal-body"></form>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="modalCancel">Cancel</button>
+                <button type="submit" form="modalForm" class="btn btn-primary" id="modalSubmit">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal" style="display:none;">
+        <div class="modal-backdrop"></div>
+        <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+            <div class="modal-header">
+                <h3 id="settingsTitle">Settings</h3>
+                <button id="settingsClose" class="modal-close" aria-label="Close"><i class="fas fa-times"></i></button>
+            </div>
+            <form id="settingsForm" class="modal-body">
+                <div class="form-row">
+                    <div class="field">
+                        <label>Company Name</label>
+                        <input name="companyName" />
+                    </div>
+                    <div class="field">
+                        <label>Support Email</label>
+                        <input name="supportEmail" type="email" />
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="field">
+                        <label>Support Phone</label>
+                        <input name="supportPhone" />
+                    </div>
+                    <div class="field">
+                        <label>Currency</label>
+                        <select name="currency">
+                            <option value="INR" selected>INR (₹)</option>
+                            <option value="USD">USD ($)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="field" style="flex:1">
+                        <label>Address</label>
+                        <input name="address" />
+                    </div>
+                </div>
+            </form>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="settingsCancel">Cancel</button>
+                <button type="submit" form="settingsForm" class="btn btn-primary" id="settingsSave">Save Settings</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script type="module" src="firebase.js"></script>
+    <script type="module" src="app.js"></script>
+    <script type="module" src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,48 @@
+{
+  "name": "omni-net-crm",
+  "version": "1.0.0",
+  "description": "Ultra Elite ISP Management Dashboard - Next-gen CRM for WiFi service providers",
+  "main": "index.html",
+  "scripts": {
+    "start": "npx serve .",
+    "dev": "npx live-server --port=3000 --open=/demo.html",
+    "build": "echo 'No build process required - static files only'",
+    "preview": "npx serve . --listen 3000"
+  },
+  "keywords": [
+    "crm",
+    "isp",
+    "wifi",
+    "dashboard",
+    "management",
+    "ui",
+    "ux",
+    "glassmorphism",
+    "ai",
+    "analytics",
+    "billing",
+    "customer-management"
+  ],
+  "author": "OmniNet CRM Team",
+  "license": "MIT",
+  "devDependencies": {
+    "live-server": "^1.2.2",
+    "serve": "^14.2.1"
+  },
+  "dependencies": {
+    "chart.js": "^4.4.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/omni-net-crm.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-username/omni-net-crm/issues"
+  },
+  "homepage": "https://github.com/your-username/omni-net-crm#readme",
+  "browserslist": [
+    "> 1%",
+    "last 2 versions",
+    "not dead"
+  ]
+}
