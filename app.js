@@ -480,6 +480,53 @@ function openModal(title, innerHtml, onSubmit){
   modal.style.display = 'block';
 }
 
+function setupSettingsHandlers(){
+  const settingsBtn = document.querySelector('.settings-btn');
+  if (!settingsBtn) return;
+  const modal = byId('settingsModal');
+  const form = byId('settingsForm');
+  const close = ()=> modal.style.display = 'none';
+  const open = ()=> {
+    if (!modal) return;
+    // prefill
+    if (form){
+      form.companyName.value = appSettings.companyName||'';
+      form.supportEmail.value = appSettings.supportEmail||'';
+      form.supportPhone.value = appSettings.supportPhone||'';
+      form.currency.value = appSettings.currency||'INR';
+      form.address.value = appSettings.address||'';
+    }
+    modal.style.display = 'block';
+  };
+  settingsBtn.addEventListener('click', open);
+  byId('settingsClose')?.addEventListener('click', close);
+  byId('settingsCancel')?.addEventListener('click', close);
+  form?.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(form).entries());
+    await setDoc(doc(db, COL_SETTINGS, 'app'), data, { merge: true });
+    appSettings = { ...appSettings, ...data };
+    toast('Settings saved');
+    close();
+    // refresh currency displays
+    renderPlans();
+    renderPayments();
+    renderCustomers();
+    renderDashboard();
+  });
+}
+
+async function loadSettings(){
+  try{
+    const snap = await getDoc(doc(db, COL_SETTINGS, 'app'));
+    if (snap.exists()) {
+      appSettings = { ...appSettings, ...(snap.data()||{}) };
+    }
+  } catch(e){
+    console.warn('Settings load failed', e);
+  }
+}
+
 function validateRequired(form){
   let hasError = false;
   form.querySelectorAll('[data-required]')?.forEach(el=>{
@@ -541,7 +588,7 @@ function planFormTemplate(values={}){
       <input name="name" value="${values.name||''}" data-required />
     </div>
     <div class="field">
-      <label>Price (USD)</label>
+      <label>Price (INR)</label>
       <input name="price" type="number" step="0.01" value="${values.price||''}" data-required />
     </div>
   </div>
@@ -618,7 +665,15 @@ async function scheduleExpiryReminders() {
 function byId(id){ return document.getElementById(id); }
 function setText(id, text){ const el = byId(id); if (el) el.textContent = text; }
 function formatNumber(n){ return (n||0).toLocaleString(); }
-function formatCurrency(n){ const num = Number(n||0); return num.toLocaleString(undefined,{style:'currency',currency:'USD'}); }
+function formatCurrency(n){
+  const num = Number(n||0);
+  const currency = appSettings?.currency || 'INR';
+  try {
+    return num.toLocaleString(undefined,{style:'currency',currency});
+  } catch (e) {
+    return `₹${num.toLocaleString()}`;
+  }
+}
 function toDate(v){ if (!v) return null; return v.toDate?.() || new Date(v); }
 function formatDate(v){ const d = toDate(v); return d ? d.toLocaleDateString() : '-'; }
 function formatTime(v){ const d = toDate(v); return d ? d.toLocaleString() : ''; }
