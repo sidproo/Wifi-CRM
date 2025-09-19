@@ -1,4 +1,5 @@
-import { db, storage } from './firebase.js';
+import { db, storage, auth } from './firebase.js';
+import { onAuthStateChanged, signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js';
 import {
   collection,
   getDocs,
@@ -28,14 +29,25 @@ const COL_CAMPAIGNS = 'campaigns';
 const COL_ACTIVITY = 'activity';
 const COL_REMINDERS = 'reminders';
 const COL_SETTINGS = 'settings';
+const COL_SHOPS = 'shops';
 
 let appSettings = { currency: 'INR', companyName: '', supportEmail: '', supportPhone: '', address: '' };
+let currentShopId = localStorage.getItem('shopId') || 'default';
 
 document.addEventListener('DOMContentLoaded', async () => {
   showApp();
   // Fallback: auto-hide loader after 6s even if something stalls
   const fallbackTimer = setTimeout(hideLoadingScreen, 6000);
   try {
+    // Auth guard
+    await new Promise((resolve)=>{
+      onAuthStateChanged(auth, (user)=>{
+        if (!user) {
+          window.location.href = 'auth.html';
+        }
+        resolve();
+      });
+    });
     await loadSettings();
     await Promise.all([
       renderDashboard(),
@@ -51,6 +63,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupSettingsHandlers();
     scheduleExpiryReminders();
     setupAIAssistant();
+    renderShopSelector();
+    setupLogout();
   } catch (err) {
     console.error('Initialization error:', err);
     toast('Failed to load some data. Check console.');
@@ -62,9 +76,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 async function renderDashboard() {
   const [customersSnap, paymentsSnap, ticketsSnap] = await Promise.all([
-    getDocs(collection(db, COL_CUSTOMERS)),
-    getDocs(collection(db, COL_PAYMENTS)),
-    getDocs(collection(db, COL_TICKETS)),
+    getDocs(query(collection(db, COL_CUSTOMERS), where('shopId','==', currentShopId))),
+    getDocs(query(collection(db, COL_PAYMENTS), where('shopId','==', currentShopId))),
+    getDocs(query(collection(db, COL_TICKETS), where('shopId','==', currentShopId))),
   ]);
 
   const totalCustomers = customersSnap.size;
@@ -80,6 +94,20 @@ async function renderDashboard() {
 
   await renderActivity();
   renderChartsFromCollections(paymentsSnap, customersSnap);
+}
+
+function setupLogout(){
+  const btn = document.getElementById('logoutBtn');
+  if (!btn) return;
+  btn.addEventListener('click', async ()=>{
+    try {
+      await signOut(auth);
+      window.location.href = 'auth.html';
+    } catch (e) {
+      toast('Logout failed');
+      console.error(e);
+    }
+  });
 }
 function setupAIAssistant(){
   const input = document.getElementById('chatInput');
@@ -228,9 +256,9 @@ async function renderAnalytics(){
   if (!revCtx && !acqCtx && !planCtx && !churnCtx) return;
 
   const [paymentsSnap, customersSnap, plansSnap] = await Promise.all([
-    getDocs(collection(db, COL_PAYMENTS)),
-    getDocs(collection(db, COL_CUSTOMERS)),
-    getDocs(collection(db, COL_PLANS))
+    getDocs(query(collection(db, COL_PAYMENTS), where('shopId','==', currentShopId))),
+    getDocs(query(collection(db, COL_CUSTOMERS), where('shopId','==', currentShopId))),
+    getDocs(query(collection(db, COL_PLANS), where('shopId','==', currentShopId)))
   ]);
 
   // Revenue by month (last 12 months)
@@ -386,11 +414,39 @@ function renderChartsFromCollections(paymentsSnap, customersSnap) {
   }
 }
 
+function renderShopSelector(){
+  const headerRight = document.querySelector('.top-header .header-right');
+  if (!headerRight) return;
+  let wrapper = document.getElementById('shopSelectorWrapper');
+  if (!wrapper) {
+    wrapper = document.createElement('div');
+    wrapper.id = 'shopSelectorWrapper';
+    wrapper.style.marginLeft = '12px';
+    wrapper.innerHTML = `<select id="shopSelector" class="filter-select" title="Select shop"></select>`;
+    headerRight.insertBefore(wrapper, headerRight.firstChild);
+  }
+  const sel = document.getElementById('shopSelector');
+  getDocs(collection(db, COL_SHOPS)).then(snap => {
+    let shops = snap.docs.map(d=>({ id:d.id, ...(d.data()||{}) }));
+    if (!shops.length) shops = [{ id:'default', name:'Default Shop' }];
+    sel.innerHTML = shops.map(s=>`<option value="${s.id}" ${s.id===currentShopId?'selected':''}>${s.name||s.id}</option>`).join('');
+  }).catch(()=>{
+    sel.innerHTML = `<option value="default" selected>Default Shop</option>`;
+  });
+  sel.onchange = async ()=>{
+    currentShopId = sel.value;
+    localStorage.setItem('shopId', currentShopId);
+    await Promise.all([
+      renderDashboard(), renderCustomers(), renderPlans(), renderPayments(), renderAnalytics(), renderMessagingStats()
+    ]);
+  };
+}
+
 async function renderCustomers() {
   const tbody = byId('customersTbody');
   if (!tbody) return;
   tbody.innerHTML = '';
-  const snap = await getDocs(collection(db, COL_CUSTOMERS));
+  const snap = await getDocs(query(collection(db, COL_CUSTOMERS), where('shopId','==', currentShopId)));
   if (snap.empty) {
     tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:#000">No customers</td></tr>`;
     return;
@@ -431,7 +487,7 @@ async function renderPlans() {
   const grid = byId('plansGrid');
   if (!grid) return;
   grid.innerHTML = '';
-  const snap = await getDocs(collection(db, COL_PLANS));
+  const snap = await getDocs(query(collection(db, COL_PLANS), where('shopId','==', currentShopId)));
   if (snap.empty) {
     grid.innerHTML = `<div style="color:#000">No plans</div>`;
     return;
@@ -466,8 +522,8 @@ async function renderPayments() {
   tbody.innerHTML = '';
 
   const [custSnap, planSnap] = await Promise.all([
-    getDocs(collection(db, COL_CUSTOMERS)),
-    getDocs(collection(db, COL_PLANS))
+    getDocs(query(collection(db, COL_CUSTOMERS), where('shopId','==', currentShopId))),
+    getDocs(query(collection(db, COL_PLANS), where('shopId','==', currentShopId)))
   ]);
 
   const customers = [];
@@ -672,14 +728,15 @@ function setupCrudHandlers(){
       const plans = await fetchPlans();
       openModal('Add Customer', customerFormTemplate({}, plans), async (data, form)=>{
         const file = form.querySelector('input[name="aadhaar"]')?.files?.[0];
-        const payload = {
+      const payload = {
           name: data.name,
           email: data.email,
           plan: data.plan,
           status: data.status,
           lastPaymentAmount: Number(data.lastPaymentAmount||0),
           expiry: data.expiry ? new Date(data.expiry) : null,
-          createdAt: serverTimestamp()
+        createdAt: serverTimestamp(),
+        shopId: currentShopId
         };
         const ref = await addDoc(collection(db, COL_CUSTOMERS), payload);
         if (file) {
@@ -745,7 +802,7 @@ function setupCrudHandlers(){
   if (createPlanBtn) {
     createPlanBtn.addEventListener('click', async () => {
       openModal('Create Plan', planFormTemplate(), async (data)=>{
-        const payload = { name: data.name, price: Number(data.price||0), speed: data.speed, data: data.data, createdAt: serverTimestamp() };
+        const payload = { name: data.name, price: Number(data.price||0), speed: data.speed, data: data.data, createdAt: serverTimestamp(), shopId: currentShopId };
         await addDoc(collection(db, COL_PLANS), payload);
         toast('Plan created');
         renderPlans();

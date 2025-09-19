@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OmniNet CRM - Sign In / Sign Up</title>
+  <link rel="stylesheet" href="styles.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+  <div class="auth-container" style="max-width:460px;margin:60px auto;padding:24px;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,0.08)">
+    <h2 style="margin:0 0 16px 0;">Welcome to OmniNet CRM</h2>
+    <p style="color:#6b7280;margin:0 0 12px 0;">Sign in or create an account for your shop.</p>
+
+    <div class="tabs" style="display:flex;gap:8px;margin-bottom:16px;">
+      <button id="tabLogin" class="btn btn-secondary" style="flex:1">Login</button>
+      <button id="tabSignup" class="btn btn-outline" style="flex:1">Sign Up</button>
+    </div>
+
+    <form id="loginForm" class="auth-form">
+      <div class="field"><label>Email</label><input name="email" type="email" required></div>
+      <div class="field"><label>Password</label><input name="password" type="password" required></div>
+      <button class="btn btn-primary" type="submit" style="width:100%;margin-top:8px;">Login</button>
+    </form>
+
+    <form id="signupForm" class="auth-form" style="display:none;">
+      <div class="field"><label>Shop Name</label><input name="shopName" required></div>
+      <div class="field"><label>Email</label><input name="email" type="email" required></div>
+      <div class="field"><label>Password</label><input name="password" type="password" required></div>
+      <button class="btn btn-primary" type="submit" style="width:100%;margin-top:8px;">Create Account</button>
+    </form>
+    <div id="authToast" style="margin-top:12px;color:#ef4444;"></div>
+  </div>
+
+  <script type="module" src="firebase.js"></script>
+  <script type="module" src="auth.js"></script>
+</body>
+</html>
+
