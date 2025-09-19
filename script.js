@@ -5,11 +5,17 @@ class OmniNetCRM {
     constructor() {
         this.currentPage = 'dashboard';
         this.charts = {};
+		this.firebase = null;
+		this.firestore = null;
+		this.storage = null;
+		this.cachedPlans = null;
+		this.cachedCustomers = null;
         this.init();
     }
 
     init() {
         this.hideLoadingScreen();
+		this.setupFirebase();
         this.setupEventListeners();
         this.initializeCharts();
         this.setupSidebar();
@@ -130,28 +136,30 @@ class OmniNetCRM {
     }
 
     showPage(page) {
-        // Hide all pages
-        document.querySelectorAll('.page').forEach(p => {
-            p.style.display = 'none';
-            p.classList.remove('active');
-        });
+		// Hide all pages
+		document.querySelectorAll('.page').forEach(p => {
+			p.style.display = 'none';
+			p.classList.remove('active');
+		});
 
-        // Show target page
-        const targetPage = document.getElementById(`${page}Page`);
-        if (targetPage) {
-            targetPage.style.display = 'block';
-            targetPage.classList.add('active');
-            this.currentPage = page;
+		// Resolve target element id
+		const candidateIds = [`${page}Page`];
+		if (page === 'ai-assistant') candidateIds.unshift('aiAssistantPage');
+		const targetPage = candidateIds.map(id => document.getElementById(id)).find(Boolean);
+		if (targetPage) {
+			targetPage.style.display = 'block';
+			targetPage.classList.add('active');
+			this.currentPage = page;
 
-            // Update page title
-            const pageTitle = document.getElementById('pageTitle');
-            if (pageTitle) {
-                pageTitle.textContent = this.getPageTitle(page);
-            }
+			// Update page title
+			const pageTitle = document.getElementById('pageTitle');
+			if (pageTitle) {
+				pageTitle.textContent = this.getPageTitle(page);
+			}
 
-            // Initialize page-specific functionality
-            this.initializePage(page);
-        }
+			// Initialize page-specific functionality
+			this.initializePage(page);
+		}
     }
 
     getPageTitle(page) {
@@ -164,7 +172,7 @@ class OmniNetCRM {
             'messaging': 'Omni Messaging Hub',
             'notifications': 'Notifications Center',
             'tickets': 'Support Tickets',
-            'ai-assistant': 'AI Assistant'
+			'ai-assistant': 'AI Assistant'
         };
         return titles[page] || 'Dashboard';
     }
@@ -185,11 +193,14 @@ class OmniNetCRM {
                 this.initializeAnalytics();
                 break;
             case 'customers':
-                this.initializeCustomers();
+				this.initializeCustomers();
                 break;
             case 'plans':
-                this.initializePlans();
+				this.initializePlans();
                 break;
+			case 'payments':
+				this.initializePayments();
+				break;
             case 'messaging':
                 this.initializeMessaging();
                 break;
@@ -198,6 +209,288 @@ class OmniNetCRM {
                 break;
         }
     }
+
+	// Firebase setup and data helpers
+	setupFirebase() {
+		try {
+			if (window.firebase && window.firebase.apps) {
+				const isInitialized = window.firebase.apps.length > 0;
+				if (!isInitialized) {
+					if (!window.FIREBASE_CONFIG) {
+						console.warn('FIREBASE_CONFIG not found on window. Firebase features will be disabled.');
+						return;
+					}
+					window.firebase.initializeApp(window.FIREBASE_CONFIG);
+				}
+				this.firebase = window.firebase;
+				this.firestore = this.firebase.firestore();
+				this.storage = this.firebase.storage ? this.firebase.storage() : null;
+			} else {
+				console.warn('Firebase SDK not detected. Include Firebase scripts to enable data features.');
+			}
+		} catch (err) {
+			console.error('Failed to initialize Firebase:', err);
+		}
+	}
+
+	async fetchPlans(forceRefresh = false) {
+		if (this.cachedPlans && !forceRefresh) return this.cachedPlans;
+		if (!this.firestore) return [];
+		const snapshot = await this.firestore.collection('plans').orderBy('name').get();
+		this.cachedPlans = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+		return this.cachedPlans;
+	}
+
+	async fetchCustomers(forceRefresh = false) {
+		if (this.cachedCustomers && !forceRefresh) return this.cachedCustomers;
+		if (!this.firestore) return [];
+		const snapshot = await this.firestore.collection('customers').orderBy('name').get();
+		this.cachedCustomers = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+		return this.cachedCustomers;
+	}
+
+	async addCustomerRecord(customer) {
+		if (!this.firestore) throw new Error('Firestore not available');
+		const ref = await this.firestore.collection('customers').add({
+			...customer,
+			createdAt: this.firebase.firestore.FieldValue.serverTimestamp()
+		});
+		this.cachedCustomers = null;
+		return ref.id;
+	}
+
+	async addPaymentRecord(payment) {
+		if (!this.firestore) throw new Error('Firestore not available');
+		const ref = await this.firestore.collection('payments').add({
+			...payment,
+			createdAt: this.firebase.firestore.FieldValue.serverTimestamp()
+		});
+		return ref.id;
+	}
+
+	// UI: Plan picker modal
+	ensurePlanPickerContainer() {
+		let container = document.getElementById('planPickerModal');
+		if (container) return container;
+		container = document.createElement('div');
+		container.id = 'planPickerModal';
+		container.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);display:none;align-items:center;justify-content:center;z-index:10000;';
+		container.innerHTML = `
+			<div style="background:#0b1220;color:#e2e8f0;border:1px solid #1f2a44;border-radius:12px;max-width:560px;width:92%;box-shadow:0 10px 30px rgba(0,0,0,0.4);">
+				<div style="padding:16px 20px;border-bottom:1px solid #1f2a44;display:flex;align-items:center;justify-content:space-between;">
+					<h3 style="margin:0;font-size:18px;">Select a Plan</h3>
+					<button id="planPickerClose" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:18px;">×</button>
+				</div>
+				<div style="padding:12px 16px;">
+					<input id="planSearchInput" placeholder="Search plans..." style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid #233255;background:#0f172a;color:#e2e8f0;" />
+				</div>
+				<div id="planList" style="max-height:360px;overflow:auto;padding:4px 8px 16px 8px;"></div>
+				<div style="padding:12px 16px;border-top:1px solid #1f2a44;text-align:right;">
+					<button id="planPickerCancel" style="background:#334155;border:none;color:#e2e8f0;padding:8px 12px;border-radius:8px;cursor:pointer;">Cancel</button>
+				</div>
+			</div>
+		`;
+		document.body.appendChild(container);
+		const close = () => container.style.display = 'none';
+		container.querySelector('#planPickerClose').addEventListener('click', close);
+		container.querySelector('#planPickerCancel').addEventListener('click', close);
+		container.addEventListener('click', (e) => { if (e.target === container) close(); });
+		return container;
+	}
+
+	async showPlanPicker(onSelect) {
+		const container = this.ensurePlanPickerContainer();
+		const planList = container.querySelector('#planList');
+		planList.innerHTML = '<div style="padding:12px;color:#94a3b8;">Loading plans...</div>';
+		container.style.display = 'flex';
+		const plans = await this.fetchPlans(true).catch(() => []);
+		if (!plans.length) {
+			planList.innerHTML = '<div style="padding:12px;color:#ef4444;">No plans found.</div>';
+			return;
+		}
+		const render = (items) => {
+			planList.innerHTML = items.map(p => `
+				<button data-id="${p.id}" style="width:100%;text-align:left;margin:6px 0;padding:10px 12px;border-radius:10px;border:1px solid #1f2a44;background:#0f172a;color:#e2e8f0;display:flex;align-items:center;justify-content:space-between;cursor:pointer;">
+					<span>
+						<strong>${p.name || 'Unnamed Plan'}</strong>
+						<div style="font-size:12px;color:#94a3b8;">$${(p.price ?? 0).toLocaleString()} • ${p.speed || ''}</div>
+					</span>
+					<span style="color:#22d3ee;">Select</span>
+				</button>
+			`).join('');
+			planList.querySelectorAll('button[data-id]').forEach(btn => {
+				btn.addEventListener('click', () => {
+					const plan = plans.find(x => x.id === btn.getAttribute('data-id'));
+					container.style.display = 'none';
+					onSelect && onSelect(plan);
+				});
+			});
+		};
+		render(plans);
+		const search = container.querySelector('#planSearchInput');
+		search.value = '';
+		search.oninput = this.debounce(() => {
+			const q = search.value.toLowerCase();
+			render(plans.filter(p => JSON.stringify(p).toLowerCase().includes(q)));
+		}, 150);
+	}
+
+	// Customers page
+	initializeCustomers() {
+		console.log('Initializing Customers page');
+		const form = document.getElementById('addCustomerForm');
+		const selectPlanBtn = document.getElementById('selectPlanForCustomer');
+		const planInput = document.getElementById('customerPlanId');
+		if (selectPlanBtn) {
+			selectPlanBtn.addEventListener('click', async (e) => {
+				e.preventDefault();
+				await this.showPlanPicker((plan) => {
+					if (planInput) planInput.value = plan.id;
+					const planNameEl = document.getElementById('customerPlanName');
+					if (planNameEl) planNameEl.textContent = plan.name || plan.id;
+				});
+			});
+		}
+		if (form) {
+			form.addEventListener('submit', async (e) => {
+				try {
+					const data = new FormData(form);
+					if (!data.get('planId')) {
+						// require plan selection
+						e.preventDefault();
+						await this.showPlanPicker((plan) => {
+							if (planInput) planInput.value = plan.id;
+							form.querySelector('[name="planId"]').value = plan.id;
+							form.requestSubmit();
+						});
+						return;
+					}
+					// Persist to Firestore if available
+					if (this.firestore) {
+						e.preventDefault();
+						const customer = {
+							name: data.get('name') || '',
+							email: data.get('email') || '',
+							phone: data.get('phone') || '',
+							address: data.get('address') || '',
+							planId: data.get('planId'),
+							status: 'active'
+						};
+						const id = await this.addCustomerRecord(customer);
+						this.showNotification(`Customer created (${customer.name || id})`, 'success');
+						form.reset();
+					}
+				} catch (err) {
+					this.showNotification('Failed to add customer', 'error');
+					console.error(err);
+				}
+			});
+		}
+	}
+
+	// Plans page
+	initializePlans() {
+		console.log('Initializing Plans page');
+		// Optionally, populate a list if container exists
+		const container = document.getElementById('plansListContainer');
+		if (container) {
+			this.fetchPlans(true).then(plans => {
+				container.innerHTML = plans.map(p => `
+					<div class="plan-row">
+						<div class="name">${p.name || 'Unnamed'}</div>
+						<div class="price">$${(p.price ?? 0).toLocaleString()}</div>
+					</div>
+				`).join('');
+			}).catch(() => {
+				container.innerHTML = '<div class="empty">Unable to load plans</div>';
+			});
+		}
+	}
+
+	// Payments page
+	initializePayments() {
+		console.log('Initializing Payments page');
+		const customerSelect = document.getElementById('paymentCustomer');
+		const planSelect = document.getElementById('paymentPlan');
+		const amountInput = document.getElementById('paymentAmount');
+		const dueDateInput = document.getElementById('paymentDueDate');
+		const nameInput = document.getElementById('paymentCustomerName');
+		const form = document.getElementById('addPaymentForm');
+
+		const populateCustomersAndPlans = async () => {
+			try {
+				const [customers, plans] = await Promise.all([
+					this.fetchCustomers(true),
+					this.fetchPlans(true)
+				]);
+				if (customerSelect && !customerSelect.children.length) {
+					customerSelect.innerHTML = '<option value="">Select customer</option>' + customers.map(c => `<option value="${c.id}">${c.name || c.id}</option>`).join('');
+				}
+				if (planSelect && !planSelect.children.length) {
+					planSelect.innerHTML = '<option value="">Select plan</option>' + plans.map(p => `<option value="${p.id}">${p.name || p.id}</option>`).join('');
+				}
+			} catch (e) {
+				console.warn('Failed to populate customers/plans', e);
+			}
+		};
+
+		const syncFromSelections = () => {
+			const selectedCustomerId = customerSelect ? customerSelect.value : '';
+			const selectedPlanId = planSelect ? planSelect.value : '';
+			const customer = (this.cachedCustomers || []).find(c => c.id === selectedCustomerId);
+			const plan = (this.cachedPlans || []).find(p => p.id === selectedPlanId);
+			if (nameInput && customer) nameInput.value = customer.name || '';
+			if (amountInput && plan && plan.price != null) amountInput.value = Number(plan.price).toFixed(2);
+			if (dueDateInput) dueDateInput.value = this.computeNextDueDate(plan) || '';
+		};
+
+		if (customerSelect) customerSelect.addEventListener('change', syncFromSelections);
+		if (planSelect) planSelect.addEventListener('change', syncFromSelections);
+		populateCustomersAndPlans().then(syncFromSelections);
+
+		if (form) {
+			form.addEventListener('submit', async (e) => {
+				try {
+					if (this.firestore) {
+						e.preventDefault();
+						const data = new FormData(form);
+						const payment = {
+							customerId: data.get('customerId') || (customerSelect ? customerSelect.value : ''),
+							planId: data.get('planId') || (planSelect ? planSelect.value : ''),
+							amount: Number(data.get('amount') || (amountInput ? amountInput.value : 0)) || 0,
+							currency: data.get('currency') || 'USD',
+							status: 'due',
+							dueDate: data.get('dueDate') || (dueDateInput ? dueDateInput.value : ''),
+							customerName: data.get('customerName') || (nameInput ? nameInput.value : '')
+						};
+						await this.addPaymentRecord(payment);
+						this.showNotification('Payment recorded', 'success');
+						form.reset();
+					}
+				} catch (err) {
+					this.showNotification('Failed to add payment', 'error');
+					console.error(err);
+				}
+			});
+		}
+	}
+
+	computeNextDueDate(plan) {
+		try {
+			const today = new Date();
+			if (plan && typeof plan.dueDayOfMonth === 'number') {
+				const target = new Date(today.getFullYear(), today.getMonth(), plan.dueDayOfMonth);
+				if (target <= today) target.setMonth(target.getMonth() + 1);
+				return target.toISOString().slice(0, 10);
+			}
+			const cycleDays = (plan && plan.billingCycleDays) ? Number(plan.billingCycleDays) : 30;
+			const due = new Date(today);
+			due.setDate(due.getDate() + cycleDays);
+			return due.toISOString().slice(0, 10);
+		} catch (_) {
+			return '';
+		}
+	}
 
     initializeDashboard() {
         // Initialize dashboard charts
@@ -892,13 +1185,7 @@ class OmniNetCRM {
         console.log('Initializing Analytics page');
     }
 
-    initializeCustomers() {
-        console.log('Initializing Customers page');
-    }
-
-    initializePlans() {
-        console.log('Initializing Plans page');
-    }
+	// (Placeholder initializers above replaced with functional ones)
 
     initializeMessaging() {
         console.log('Initializing Messaging page');

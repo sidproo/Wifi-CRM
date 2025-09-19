@@ -44,11 +44,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       renderPayments(),
       renderTickets(),
       renderMessagingStats(),
+      renderAnalytics()
     ]);
     setupMessagingForms();
     setupCrudHandlers();
     setupSettingsHandlers();
     scheduleExpiryReminders();
+    setupAIAssistant();
   } catch (err) {
     console.error('Initialization error:', err);
     toast('Failed to load some data. Check console.');
@@ -78,6 +80,227 @@ async function renderDashboard() {
 
   await renderActivity();
   renderChartsFromCollections(paymentsSnap, customersSnap);
+}
+function setupAIAssistant(){
+  const input = document.getElementById('chatInput');
+  const send = document.getElementById('sendMessage');
+  const messages = document.getElementById('chatMessages');
+  if (!input || !send || !messages) return;
+
+  // Onboarding questions and quick help
+  const onboarding = [
+    'Welcome! What are you trying to do today? (e.g., add customer, create plan, analyze revenue) ',
+    'Do you want a quick tour of Customers, Plans, and Payments? (yes/no)',
+    'Would you like me to analyze your top plans and churn risk now? (yes/no)'
+  ];
+
+  const addBot = (html)=>{
+    const div = document.createElement('div');
+    div.className = 'message ai-message';
+    div.innerHTML = `<div class="message-avatar"><i class="fas fa-robot"></i></div><div class="message-content">${html}</div>`;
+    messages.appendChild(div);
+    messages.scrollTop = messages.scrollHeight;
+  };
+  const addUser = (text)=>{
+    const div = document.createElement('div');
+    div.className = 'message user-message';
+    div.innerHTML = `<div class="message-avatar"><i class="fas fa-user"></i></div><div class="message-content"><p>${text}</p></div>`;
+    messages.appendChild(div);
+    messages.scrollTop = messages.scrollHeight;
+  };
+
+  // Seed onboarding suggestions
+  addBot(`<p>I can help you with:</p>
+    <ul>
+      <li>Adding customers and assigning plans</li>
+      <li>Creating plans and pricing</li>
+      <li>Revenue, churn and retention analytics</li>
+      <li>Payment reminders and collections</li>
+    </ul>
+    <p>${onboarding[0]}</p>`);
+
+  const handle = async (text)=>{
+    const t = text.toLowerCase();
+    if (/(help|tour)/.test(t)){
+      addBot(`<p>Great! Here’s a quick guide:</p>
+      <ol>
+        <li>Customers → Add Customer to onboard a subscriber (pick a Plan).</li>
+        <li>Plans → Create Plan to add pricing and speed tiers.</li>
+        <li>Payments → Auto-derived from plans and expiries, no manual entry needed.</li>
+        <li>Analytics → Track revenue trends, new customers, and churn risk.</li>
+      </ol>`);
+      return;
+    }
+    if (/(analy[sz]e|analysis|report|suggest|insight)/.test(t)){
+      const html = await generateAISuggestionsHTML();
+      addBot(html);
+      return;
+    }
+    if (/(add customer|new customer)/.test(t)){
+      addBot(`<p>Go to Customers → Add Customer. You'll select a plan and the system will compute payment due dates automatically.</p>`);
+      return;
+    }
+    if (/(create plan|new plan)/.test(t)){
+      addBot(`<p>Go to Plans → Create Plan. Include name, price, speed. The price drives billing in Payments.</p>`);
+      return;
+    }
+    // default: show suggestions prompt
+    addBot(`<p>I can generate tailored suggestions from your data. Type "analyze" to proceed.</p>`);
+  };
+
+  send.addEventListener('click', async ()=>{
+    const v = input.value.trim(); if (!v) return;
+    addUser(v); input.value='';
+    await handle(v);
+  });
+  input.addEventListener('keypress', async (e)=>{
+    if (e.key==='Enter') { e.preventDefault(); const v = input.value.trim(); if (!v) return; addUser(v); input.value=''; await handle(v); }
+  });
+}
+
+async function generateAISuggestionsHTML(){
+  const [paymentsSnap, customersSnap, plansSnap] = await Promise.all([
+    getDocs(collection(db, COL_PAYMENTS)),
+    getDocs(collection(db, COL_CUSTOMERS)),
+    getDocs(collection(db, COL_PLANS))
+  ]);
+
+  // Aggregates
+  const customers = customersSnap.docs.map(d=>({ id:d.id, ...(d.data()||{}) }));
+  const plans = plansSnap.docs.map(d=>({ id:d.id, ...(d.data()||{}) }));
+  const payments = paymentsSnap.docs.map(d=>({ id:d.id, ...(d.data()||{}) }));
+
+  const totalRevenue = payments.reduce((s,p)=> s + Number(p.amount||0), 0);
+  const activeCustomers = customers.filter(c=>{
+    const exp = toDate(c.expiry); return !exp || exp >= new Date();
+  });
+  const arpu = activeCustomers.length ? totalRevenue / activeCustomers.length : 0;
+
+  const planCounts = {};
+  activeCustomers.forEach(c=>{ const k = c.plan || 'Unassigned'; planCounts[k] = (planCounts[k]||0)+1; });
+  const topPlan = Object.keys(planCounts).sort((a,b)=>planCounts[b]-planCounts[a])[0] || '-';
+
+  const now = new Date(); const in30 = new Date(now); in30.setDate(in30.getDate()+30);
+  const churned = customers.filter(c=>{ const e = toDate(c.expiry); return e && e < now; }).length;
+  const atRisk = customers.filter(c=>{ const e = toDate(c.expiry); return e && e >= now && e <= in30; }).length;
+  const retained = customers.length - churned;
+
+  // Profit margin approximation if plan.cost exists
+  const nameToPlan = new Map(plans.map(p=>[p.name||p.id,p]));
+  let revenueMonthly = 0, costMonthly = 0;
+  activeCustomers.forEach(c=>{
+    const p = nameToPlan.get(c.plan); const price = Number(p?.price||0); const cost = Number(p?.cost||0);
+    revenueMonthly += price; costMonthly += cost;
+  });
+  const marginPct = revenueMonthly ? Math.round(((revenueMonthly - costMonthly)/revenueMonthly)*100) : 0;
+
+  // Upsell opportunities: customers on plan below median price
+  const prices = plans.map(p=>Number(p.price||0)).filter(n=>!isNaN(n)).sort((a,b)=>a-b);
+  const median = prices.length ? prices[Math.floor(prices.length/2)] : 0;
+  const upsell = activeCustomers.filter(c=>{
+    const p = nameToPlan.get(c.plan); return Number(p?.price||0) < median;
+  }).length;
+
+  return `
+  <div>
+    <h4>Data-driven Suggestions</h4>
+    <ul>
+      <li><strong>ARPU:</strong> ${formatCurrency(arpu)}</li>
+      <li><strong>Top Plan:</strong> ${topPlan} (${planCounts[topPlan]||0} active)</li>
+      <li><strong>Retention:</strong> Retained ${retained}, At Risk ${atRisk}, Churned ${churned}</li>
+      <li><strong>Monthly Margin:</strong> ${marginPct}% ${prices.length? '(assumes plan cost set on plan)': ''}</li>
+      <li><strong>Upsell Opportunities:</strong> ${upsell} customers below median plan price</li>
+    </ul>
+    <h4>Recommendations</h4>
+    <ol>
+      <li>Target at-risk customers with reminders and limited-time discounts on ${topPlan}.</li>
+      <li>Upsell ${upsell} customers on low-tier plans to higher tiers to grow ARPU.</li>
+      <li>Review plan costs to improve margin; aim for 60%+ gross margin.</li>
+      <li>Automate reminders 7 days before expiry to reduce churn.</li>
+    </ol>
+  </div>`;
+}
+async function renderAnalytics(){
+  const revCtx = document.getElementById('revenueTrendChart');
+  const acqCtx = document.getElementById('acquisitionChart');
+  const planCtx = document.getElementById('planDistributionChart');
+  const churnCtx = document.getElementById('churnChart');
+  if (!revCtx && !acqCtx && !planCtx && !churnCtx) return;
+
+  const [paymentsSnap, customersSnap, plansSnap] = await Promise.all([
+    getDocs(collection(db, COL_PAYMENTS)),
+    getDocs(collection(db, COL_CUSTOMERS)),
+    getDocs(collection(db, COL_PLANS))
+  ]);
+
+  // Revenue by month (last 12 months)
+  const now = new Date();
+  const months = Array.from({length: 12}, (_,i)=>{
+    const d = new Date(now.getFullYear(), now.getMonth()-11+i, 1);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  });
+  const revenueByMonth = Object.fromEntries(months.map(m=>[m,0]));
+  paymentsSnap.forEach(d=>{
+    const p = d.data();
+    const paid = toDate(p.paidAt) || toDate(p.createdAt) || new Date();
+    const key = `${paid.getFullYear()}-${String(paid.getMonth()+1).padStart(2,'0')}`;
+    if (key in revenueByMonth) revenueByMonth[key] += Number(p.amount||0);
+  });
+
+  // New customers by month (last 12 months)
+  const newCustByMonth = Object.fromEntries(months.map(m=>[m,0]));
+  customersSnap.forEach(d=>{
+    const c = d.data();
+    const created = toDate(c.createdAt) || new Date();
+    const key = `${created.getFullYear()}-${String(created.getMonth()+1).padStart(2,'0')}`;
+    if (key in newCustByMonth) newCustByMonth[key] += 1;
+  });
+
+  // Plan distribution (current)
+  const planCounts = {};
+  customersSnap.forEach(d=>{
+    const c = d.data();
+    const planName = c.plan || 'Unassigned';
+    planCounts[planName] = (planCounts[planName]||0)+1;
+  });
+  const planLabels = Object.keys(planCounts);
+  const planValues = planLabels.map(k=>planCounts[k]);
+
+  // Churn/Retention approximation
+  // Rule: if expiry in past => churned; if expiry within next 30 days => at risk; else retained
+  let churned=0, retained=0, atRisk=0;
+  const in30 = new Date(now); in30.setDate(in30.getDate()+30);
+  customersSnap.forEach(d=>{
+    const c = d.data();
+    const expiry = toDate(c.expiry);
+    if (!expiry) { retained++; return; }
+    if (expiry < now) churned++; else if (expiry <= in30) atRisk++; else retained++;
+  });
+
+  // Draw charts
+  if (revCtx) new Chart(revCtx, {
+    type: 'line',
+    data: { labels: months, datasets: [{ data: months.map(m=>revenueByMonth[m]), borderColor:'#06b6d4', backgroundColor:'rgba(6,182,212,0.1)', fill:true, tension:0.35, borderWidth:3 }] },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ y:{ beginAtZero:true } } }
+  });
+
+  if (acqCtx) new Chart(acqCtx, {
+    type: 'bar',
+    data: { labels: months, datasets: [{ data: months.map(m=>newCustByMonth[m]), backgroundColor:'rgba(59,130,246,0.8)', borderRadius:8, borderSkipped:false }] },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ y:{ beginAtZero:true } } }
+  });
+
+  if (planCtx) new Chart(planCtx, {
+    type: 'doughnut',
+    data: { labels: planLabels, datasets: [{ data: planValues, backgroundColor:['#06b6d4','#22d3ee','#3b82f6','#6366f1','#8b5cf6','#a855f7','#ec4899','#f59e0b'] }] },
+    options: { responsive:true, maintainAspectRatio:false }
+  });
+
+  if (churnCtx) new Chart(churnCtx, {
+    type: 'bar',
+    data: { labels: ['Retained','At Risk','Churned'], datasets: [{ data:[retained, atRisk, churned], backgroundColor:['#10b981','#f59e0b','#ef4444'], borderRadius:8, borderSkipped:false }] },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ y:{ beginAtZero:true } } }
+  });
 }
 
 async function renderActivity() {
@@ -241,34 +464,53 @@ async function renderPayments() {
   const tbody = byId('paymentsTbody');
   if (!tbody) return;
   tbody.innerHTML = '';
-  const snap = await getDocs(collection(db, COL_PAYMENTS));
-  if (snap.empty) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:#000">No payments</td></tr>`;
+
+  const [custSnap, planSnap] = await Promise.all([
+    getDocs(collection(db, COL_CUSTOMERS)),
+    getDocs(collection(db, COL_PLANS))
+  ]);
+
+  const plans = new Map();
+  planSnap.forEach(d => plans.set(d.id, d.data()));
+
+  if (custSnap.empty) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:#000">No customers</td></tr>`;
     return;
   }
+
+  const now = new Date();
   const frag = document.createDocumentFragment();
-  snap.forEach(docSnap => {
-    const p = docSnap.data();
+  custSnap.forEach(docSnap => {
+    const c = docSnap.data();
+    const plan = [...plans.values()].find(p => (p.name||'') === (c.plan||''));
+    const amount = Number(plan?.price || 0);
+    const dueDate = toDate(c.expiry) || computeNextDueDate(plan);
+    const status = (()=>{
+      if (!dueDate) return 'Pending';
+      const d = new Date(dueDate);
+      if (d < now) return 'Pending';
+      const days = Math.ceil((d - now)/(1000*60*60*24));
+      return days <= 7 ? 'Pending' : 'Active';
+    })();
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${p.id || docSnap.id}</td>
+      <td>${docSnap.id}</td>
       <td>
         <div class="customer-info">
           <div class="customer-avatar"><img src="https://via.placeholder.com/32x32/4A90E2/FFFFFF?text=C" alt="Customer"></div>
           <div>
-            <div class="customer-name">${p.customerName || ''}</div>
-            <div class="customer-email">${p.customerEmail || ''}</div>
+            <div class="customer-name">${c.name || ''}</div>
+            <div class="customer-email">${c.email || ''}</div>
           </div>
         </div>
       </td>
-      <td>${formatCurrency(p.amount)}</td>
-      <td>${p.method || '-'}</td>
-      <td><span class="status-badge ${badgeForStatus(p.status)}">${p.status || '-'}</span></td>
-      <td>${formatDate(p.paidAt)}</td>
+      <td>${formatCurrency(amount)}</td>
+      <td>${plan?.name || '-'}</td>
+      <td><span class="status-badge ${badgeForStatus(status)}">${status}</span></td>
+      <td>${typeof dueDate === 'string' ? dueDate : formatDate(dueDate)}</td>
       <td>
         <div class="action-buttons">
           <button class="action-btn" title="View"><i class="fas fa-eye"></i></button>
-          <button class="action-btn" title="Refund"><i class="fas fa-undo"></i></button>
         </div>
       </td>`;
     frag.appendChild(tr);
@@ -443,19 +685,19 @@ function setupCrudHandlers(){
 
   const recordPaymentBtn = document.getElementById('recordPaymentBtn');
   if (recordPaymentBtn) {
-    recordPaymentBtn.addEventListener('click', async () => {
-      openModal('Record Payment', paymentFormTemplate({status:'Paid', method:'Card'}), async (data)=>{
-        const payload = { customerName: data.customerName, amount: Number(data.amount||0), method: data.method, status: data.status, paidAt: serverTimestamp(), createdAt: serverTimestamp() };
-        await addDoc(collection(db, COL_PAYMENTS), payload);
-        toast('Payment recorded');
-        renderPayments();
-      });
-    });
+    // Hide and disable manual record; we auto-derive payments
+    recordPaymentBtn.style.display = 'none';
+    recordPaymentBtn.disabled = true;
   }
 }
 
 async function fetchPlans(){
   const snap = await getDocs(collection(db, COL_PLANS));
+  return snap.docs.map(d=>({ id: d.id, ...(d.data()||{}) }));
+}
+
+async function fetchCustomers(){
+  const snap = await getDocs(collection(db, COL_CUSTOMERS));
   return snap.docs.map(d=>({ id: d.id, ...(d.data()||{}) }));
 }
 
@@ -543,7 +785,8 @@ function validateRequired(form){
   return hasError;
 }
 
-function customerFormTemplate(values={}){
+function customerFormTemplate(values={}, plans=[]) {
+  const planOptions = plans.map(p=>`<option value="${p.name||p.id}" ${values.plan===(p.name||p.id)?'selected':''}>${p.name||p.id} (${formatCurrency(p.price)})</option>`).join('');
   return `
   <div class="form-row">
     <div class="field">
@@ -558,7 +801,10 @@ function customerFormTemplate(values={}){
   <div class="form-row">
     <div class="field">
       <label>Plan</label>
-      <input name="plan" value="${values.plan||''}" data-required />
+      <select name="plan" data-required>
+        <option value="" ${!values.plan?'selected':''}>Select Plan</option>
+        ${planOptions}
+      </select>
     </div>
     <div class="field">
       <label>Status</label>
@@ -604,8 +850,26 @@ function planFormTemplate(values={}){
   </div>`;
 }
 
-function paymentFormTemplate(values={}){
+function paymentFormTemplate(values={}, customers=[], plans=[]) {
+  const customerOptions = customers.map(c=>`<option value="${c.id}">${c.name||c.id}</option>`).join('');
+  const planOptions = plans.map(p=>`<option value="${p.id}" data-price="${Number(p.price||0)}">${p.name||p.id} (${formatCurrency(p.price)})</option>`).join('');
   return `
+  <div class="form-row">
+    <div class="field">
+      <label>Customer</label>
+      <select name="customerId" data-required>
+        <option value="">Select Customer</option>
+        ${customerOptions}
+      </select>
+    </div>
+    <div class="field">
+      <label>Plan</label>
+      <select name="planId" data-required>
+        <option value="">Select Plan</option>
+        ${planOptions}
+      </select>
+    </div>
+  </div>
   <div class="form-row">
     <div class="field">
       <label>Customer Name</label>
@@ -617,6 +881,10 @@ function paymentFormTemplate(values={}){
     </div>
   </div>
   <div class="form-row">
+    <div class="field">
+      <label>Due Date</label>
+      <input name="dueDate" type="date" value="${values.dueDate||''}" data-required />
+    </div>
     <div class="field">
       <label>Method</label>
       <select name="method" data-required>
@@ -634,6 +902,18 @@ function paymentFormTemplate(values={}){
       </select>
     </div>
   </div>`;
+}
+
+function computeNextDueDate(plan){
+  try{
+    const today = new Date();
+    const cycle = Number(plan?.billingCycleDays||30);
+    const due = new Date(today);
+    due.setDate(due.getDate()+cycle);
+    return due.toISOString().slice(0,10);
+  } catch(e){
+    return '';
+  }
 }
 
 async function scheduleExpiryReminders() {
