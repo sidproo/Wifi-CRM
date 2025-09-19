@@ -470,8 +470,11 @@ async function renderPayments() {
     getDocs(collection(db, COL_PLANS))
   ]);
 
-  const plans = new Map();
-  planSnap.forEach(d => plans.set(d.id, d.data()));
+  const customers = [];
+  custSnap.forEach(d => customers.push({ id: d.id, ...(d.data()||{}) }));
+  const plansArr = [];
+  planSnap.forEach(d => plansArr.push({ id: d.id, ...(d.data()||{}) }));
+  const plans = new Map(plansArr.map(p=>[p.id, p]));
 
   if (custSnap.empty) {
     tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:#000">No customers</td></tr>`;
@@ -510,12 +513,79 @@ async function renderPayments() {
       <td>${typeof dueDate === 'string' ? dueDate : formatDate(dueDate)}</td>
       <td>
         <div class="action-buttons">
-          <button class="action-btn" title="View"><i class="fas fa-eye"></i></button>
+          <button class="action-btn" title="Invoice" data-action="invoice" data-id="${docSnap.id}"><i class="fas fa-file-invoice"></i></button>
         </div>
       </td>`;
     frag.appendChild(tr);
   });
   tbody.appendChild(frag);
+
+  // Handle invoice generation clicks
+  tbody.addEventListener('click', async (e)=>{
+    const btn = e.target.closest('button[data-action="invoice"]');
+    if (!btn) return;
+    const id = btn.dataset.id;
+    const c = customers.find(x => x.id === id);
+    if (!c) { toast('Customer not found'); return; }
+    const p = plansArr.find(x => (x.name||'') === (c.plan||''));
+    try {
+      await ensureJsPDF();
+      generateInvoicePDF({ customer: c, plan: p });
+    } catch (err) {
+      console.error('Invoice generation failed', err);
+      toast('Failed to generate PDF');
+    }
+  }, { once: true });
+}
+
+async function ensureJsPDF(){
+  if (window.jspdf || window.jsPDF) return;
+  await new Promise(res=>{
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js';
+    s.onload = res; document.head.appendChild(s);
+  });
+}
+
+function generateInvoicePDF({ customer, plan }){
+  const { jsPDF } = window.jspdf || window.jsPDF || {};
+  if (!jsPDF) { toast('PDF generator unavailable'); return; }
+  const doc = new jsPDF();
+  const company = appSettings.companyName || 'OmniNet CRM';
+  const address = appSettings.address || '';
+  const currency = appSettings.currency || 'INR';
+  const price = Number(plan?.price||0);
+  const now = new Date();
+  const invoiceId = 'INV-' + now.getFullYear() + (now.getMonth()+1) + '-' + Math.floor(Math.random()*100000);
+
+  doc.setFontSize(16);
+  doc.text(company, 14, 20);
+  doc.setFontSize(11);
+  doc.text(address, 14, 27);
+  doc.text(`Invoice: ${invoiceId}`, 150, 20);
+  doc.text(`Date: ${now.toLocaleDateString()}`, 150, 27);
+
+  doc.setFontSize(13);
+  doc.text('Bill To:', 14, 45);
+  doc.setFontSize(12);
+  doc.text(customer.name || '', 14, 52);
+  if (customer.email) doc.text(customer.email, 14, 58);
+
+  doc.setFontSize(13);
+  doc.text('Details', 14, 75);
+  doc.setFontSize(12);
+  const lines = [
+    ['Plan', plan?.name || '-'],
+    ['Amount', formatCurrency(price)],
+    ['Due Date', customer.expiry ? formatDate(customer.expiry) : (computeNextDueDate(plan) || '-')],
+    ['Status', (customer.expiry && new Date(customer.expiry) < new Date()) ? 'Pending' : 'Active']
+  ];
+  let y = 82;
+  lines.forEach(([k,v])=>{ doc.text(`${k}: ${v}`, 14, y); y += 7; });
+
+  doc.setFontSize(10);
+  doc.text('Thank you for your business!', 14, 130);
+  doc.save(`${invoiceId}.pdf`);
 }
 
 async function renderTickets() {
