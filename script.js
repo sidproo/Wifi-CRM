@@ -685,49 +685,21 @@ class OmniNetCRM {
     }
 
     loadRecentActivity() {
-        // Mock recent activity data
-        const activities = [
-            {
-                icon: 'fas fa-user-plus',
-                content: 'New customer <strong>Sarah Johnson</strong> subscribed to Premium Plan',
-                time: '2 minutes ago'
-            },
-            {
-                icon: 'fas fa-credit-card',
-                content: 'Payment received from <strong>Mike Chen</strong> - $89.99',
-                time: '15 minutes ago'
-            },
-            {
-                icon: 'fas fa-ticket-alt',
-                content: 'Support ticket #1234 resolved by <strong>Alex Smith</strong>',
-                time: '1 hour ago'
-            },
-            {
-                icon: 'fas fa-wifi',
-                content: 'Network maintenance completed in Zone A',
-                time: '2 hours ago'
-            },
-            {
-                icon: 'fas fa-chart-line',
-                content: 'Monthly revenue target achieved - 105%',
-                time: '3 hours ago'
-            }
-        ];
-
         const activityList = document.querySelector('.activity-list');
-        if (activityList) {
-            activityList.innerHTML = activities.map(activity => `
-                <div class="activity-item">
-                    <div class="activity-icon">
-                        <i class="${activity.icon}"></i>
-                    </div>
-                    <div class="activity-content">
-                        <p>${activity.content}</p>
-                        <span class="activity-time">${activity.time}</span>
-                    </div>
+        if (!activityList) return;
+
+        // Show empty state until real data is loaded
+        activityList.innerHTML = `
+            <div class="activity-item" style="text-align: center; padding: 20px; color: #6b7280;">
+                <div class="activity-icon">
+                    <i class="fas fa-clock"></i>
                 </div>
-            `).join('');
-        }
+                <div class="activity-content">
+                    <p>No recent activity</p>
+                    <span class="activity-time">Activity will appear here in real-time</span>
+                </div>
+            </div>
+        `;
     }
 
     setupMessaging() {

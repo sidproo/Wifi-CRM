@@ -107,7 +107,7 @@
                         <img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40'><rect width='40' height='40' rx='8' fill='%234A90E2'/><text x='20' y='26' text-anchor='middle' font-family='Inter, Arial' font-size='16' fill='white'>JD</text></svg>" alt="User">
                     </div>
                     <div class="user-info">
-                        <span class="user-name">John Doe</span>
+                        <span class="user-name">User</span>
                         <span class="user-role">Admin</span>
                     </div>
                 </div>
@@ -140,7 +140,7 @@
                     <div class="header-actions">
                         <button class="action-btn notification-btn">
                             <i class="fas fa-bell"></i>
-                            <span class="notification-badge">3</span>
+                            <span class="notification-badge" id="notificationBadge" style="display: none;">0</span>
                         </button>
                         <button class="action-btn settings-btn">
                             <i class="fas fa-cog"></i>
@@ -483,33 +483,15 @@
                             </div>
                         </div>
 
-                        <div class="ai-insights">
+                        <div class="ai-insights" id="aiInsightsContainer">
                             <h3>AI Insights</h3>
-                            <div class="insight-card">
-                                <div class="insight-icon">
-                                    <i class="fas fa-exclamation-triangle"></i>
+                            <div class="insight-card" style="text-align: center; padding: 40px;">
+                                <div class="insight-icon" style="font-size: 48px; color: #d1d5db; margin-bottom: 16px;">
+                                    <i class="fas fa-robot"></i>
                                 </div>
                                 <div class="insight-content">
-                                    <h4>Churn Risk Alert</h4>
-                                    <p>23 customers are at high risk of churning in the next 30 days. Consider reaching out with retention offers.</p>
-                                </div>
-                            </div>
-                            <div class="insight-card">
-                                <div class="insight-icon">
-                                    <i class="fas fa-trending-up"></i>
-                                </div>
-                                <div class="insight-content">
-                                    <h4>Upsell Opportunity</h4>
-                                    <p>156 customers on Basic plan could be upgraded to Premium. Potential revenue increase: $4,680/month.</p>
-                                </div>
-                            </div>
-                            <div class="insight-card">
-                                <div class="insight-icon">
-                                    <i class="fas fa-calendar"></i>
-                                </div>
-                                <div class="insight-content">
-                                    <h4>Payment Reminder</h4>
-                                    <p>89 customers have payments due in the next 7 days. Send automated reminders to improve collection rate.</p>
+                                    <h4 style="color: #6b7280; margin-bottom: 8px;">No insights yet</h4>
+                                    <p style="color: #9ca3af;">Add customers and plans to get AI-powered business insights and recommendations.</p>
                                 </div>
                             </div>
                         </div>
@@ -631,49 +613,12 @@
                         </div>
                     </div>
 
-                    <div class="notifications-grid">
-                        <div class="notification-card">
-                            <div class="notification-icon">
-                                <i class="fas fa-exclamation-triangle"></i>
-                            </div>
+                    <div class="notifications-grid" id="notificationsGrid">
+                        <div class="notification-card" style="text-align: center; padding: 40px;">
                             <div class="notification-content">
-                                <h4>Payment Failed</h4>
-                                <p>Payment for customer John Doe failed. Amount: $59.99</p>
-                                <span class="notification-time">2 minutes ago</span>
-                            </div>
-                            <div class="notification-actions">
-                                <button class="btn btn-sm btn-primary">Retry</button>
-                                <button class="btn btn-sm btn-secondary">Dismiss</button>
-                            </div>
-                        </div>
-
-                        <div class="notification-card">
-                            <div class="notification-icon">
-                                <i class="fas fa-user-plus"></i>
-                            </div>
-                            <div class="notification-content">
-                                <h4>New Customer</h4>
-                                <p>Sarah Johnson subscribed to Premium Plan</p>
-                                <span class="notification-time">15 minutes ago</span>
-                            </div>
-                            <div class="notification-actions">
-                                <button class="btn btn-sm btn-primary">View</button>
-                                <button class="btn btn-sm btn-secondary">Dismiss</button>
-                            </div>
-                        </div>
-
-                        <div class="notification-card">
-                            <div class="notification-icon">
-                                <i class="fas fa-ticket-alt"></i>
-                            </div>
-                            <div class="notification-content">
-                                <h4>Support Ticket</h4>
-                                <p>New high-priority ticket #1234 from Mike Chen</p>
-                                <span class="notification-time">1 hour ago</span>
-                            </div>
-                            <div class="notification-actions">
-                                <button class="btn btn-sm btn-primary">View</button>
-                                <button class="btn btn-sm btn-secondary">Dismiss</button>
+                                <i class="fas fa-bell-slash" style="font-size: 48px; color: #d1d5db; margin-bottom: 16px;"></i>
+                                <h4 style="color: #6b7280; margin-bottom: 8px;">No notifications yet</h4>
+                                <p style="color: #9ca3af;">You'll see real-time notifications here when customers are added, payments are received, or plans expire.</p>
                             </div>
                         </div>
                     </div>

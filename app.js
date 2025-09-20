@@ -12,7 +12,8 @@ import {
   query,
   where,
   orderBy,
-  limit
+  limit,
+  onSnapshot
 } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js';
 import {
   ref as storageRef,
@@ -33,6 +34,7 @@ const COL_SHOPS = 'shops';
 
 let appSettings = { currency: 'INR', companyName: '', supportEmail: '', supportPhone: '', address: '' };
 let currentShopId = localStorage.getItem('shopId') || 'default';
+let realtimeListeners = new Map(); // Track real-time listeners
 
 document.addEventListener('DOMContentLoaded', async () => {
   showApp();
@@ -62,9 +64,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupCrudHandlers();
     setupSettingsHandlers();
     scheduleExpiryReminders();
-    setupAIAssistant();
+    await setupAIAssistant();
     renderShopSelector();
     setupLogout();
+    setupRealtimeListeners();
+    setupRealtimeNotifications();
   } catch (err) {
     console.error('Initialization error:', err);
     toast('Failed to load some data. Check console.');
@@ -94,6 +98,50 @@ async function renderDashboard() {
 
   await renderActivity();
   renderChartsFromCollections(paymentsSnap, customersSnap);
+  
+  // Update AI insights with real data
+  const customers = customersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const plans = await getCachedCollection(COL_PLANS).catch(() => []);
+  const payments = paymentsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  
+  // Calculate insights data
+  const now = new Date();
+  const in30 = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const atRisk = customers.filter(c => {
+    const e = toDate(c.expiry);
+    return e && e >= now && e <= in30;
+  }).length;
+  
+  const activeCustomers = customers.filter(c => {
+    const exp = toDate(c.expiry);
+    return !exp || exp >= new Date();
+  });
+  
+  const planCounts = {};
+  activeCustomers.forEach(c => {
+    const k = c.plan || 'Unassigned';
+    planCounts[k] = (planCounts[k] || 0) + 1;
+  });
+  const topPlan = Object.keys(planCounts).sort((a, b) => planCounts[b] - planCounts[a])[0] || '-';
+  
+  const totalRevenue = payments.reduce((s, p) => s + Number(p.amount || 0), 0);
+  const arpu = activeCustomers.length ? totalRevenue / activeCustomers.length : 0;
+  
+  const nameToPlan = new Map(plans.map(p => [p.name || p.id, p]));
+  const prices = plans.map(p => Number(p.price || 0)).filter(n => !isNaN(n)).sort((a, b) => a - b);
+  const median = prices.length ? prices[Math.floor(prices.length / 2)] : 0;
+  const upsell = activeCustomers.filter(c => {
+    const p = nameToPlan.get(c.plan);
+    return Number(p?.price || 0) < median;
+  }).length;
+  
+  const churned = customers.filter(c => {
+    const e = toDate(c.expiry);
+    return e && e < now;
+  }).length;
+  const retained = customers.length - churned;
+  
+  updateAIInsightsContainer(customers, plans, payments, atRisk, upsell, churned, retained, arpu, topPlan, planCounts);
 }
 
 function setupLogout(){
@@ -101,6 +149,9 @@ function setupLogout(){
   if (!btn) return;
   btn.addEventListener('click', async ()=>{
     try {
+      // Clean up real-time listeners
+      realtimeListeners.forEach(unsubscribe => unsubscribe());
+      realtimeListeners.clear();
       await signOut(auth);
       window.location.href = 'auth.html';
     } catch (e) {
@@ -109,7 +160,325 @@ function setupLogout(){
     }
   });
 }
-function setupAIAssistant(){
+
+// Real-time listeners for live data updates
+function setupRealtimeListeners(){
+  // Listen to customers changes
+  const customersQuery = query(collection(db, COL_CUSTOMERS), where('shopId','==', currentShopId));
+  const unsubscribeCustomers = onSnapshot(customersQuery, (snap) => {
+    renderCustomers();
+    renderPayments();
+    renderDashboard();
+    renderAnalytics();
+  });
+  realtimeListeners.set('customers', unsubscribeCustomers);
+
+  // Listen to plans changes
+  const plansQuery = query(collection(db, COL_PLANS), where('shopId','==', currentShopId));
+  const unsubscribePlans = onSnapshot(plansQuery, (snap) => {
+    renderPlans();
+    renderPayments();
+    renderAnalytics();
+  });
+  realtimeListeners.set('plans', unsubscribePlans);
+
+  // Listen to payments changes
+  const paymentsQuery = query(collection(db, COL_PAYMENTS), where('shopId','==', currentShopId));
+  const unsubscribePayments = onSnapshot(paymentsQuery, (snap) => {
+    renderPayments();
+    renderDashboard();
+    renderAnalytics();
+  });
+  realtimeListeners.set('payments', unsubscribePayments);
+
+  // Listen to activity changes
+  const activityQuery = query(collection(db, COL_ACTIVITY), where('shopId','==', currentShopId), orderBy('createdAt', 'desc'), limit(10));
+  const unsubscribeActivity = onSnapshot(activityQuery, (snap) => {
+    renderActivity();
+  });
+  realtimeListeners.set('activity', unsubscribeActivity);
+}
+
+// Real-time notifications system
+function setupRealtimeNotifications(){
+  // Listen for new customers
+  const customersQuery = query(collection(db, COL_CUSTOMERS), where('shopId','==', currentShopId));
+  onSnapshot(customersQuery, (snap) => {
+    snap.docChanges().forEach(change => {
+      if (change.type === 'added') {
+        const customer = change.doc.data();
+        showNotification(`New customer added: ${customer.name}`, 'success');
+        addNotificationToGrid('fas fa-user-plus', 'New Customer', `${customer.name} subscribed to ${customer.plan || 'No Plan'}`, 'success');
+        // Log activity
+        addActivity('fas fa-user-plus', `New customer ${customer.name} subscribed to ${customer.plan || 'No Plan'}`);
+      }
+    });
+  });
+
+  // Listen for payment status changes
+  const paymentsQuery = query(collection(db, COL_PAYMENTS), where('shopId','==', currentShopId));
+  onSnapshot(paymentsQuery, (snap) => {
+    snap.docChanges().forEach(change => {
+      if (change.type === 'added') {
+        const payment = change.doc.data();
+        showNotification(`Payment received: ${formatCurrency(payment.amount)} from ${payment.customerName}`, 'success');
+        addNotificationToGrid('fas fa-credit-card', 'Payment Received', `${formatCurrency(payment.amount)} from ${payment.customerName}`, 'success');
+        addActivity('fas fa-credit-card', `Payment received from ${payment.customerName} - ${formatCurrency(payment.amount)}`);
+      }
+    });
+  });
+
+  // Check for expiring customers daily
+  setInterval(checkExpiringCustomers, 24 * 60 * 60 * 1000); // 24 hours
+  checkExpiringCustomers(); // Run immediately
+}
+
+async function checkExpiringCustomers(){
+  const customersQuery = query(collection(db, COL_CUSTOMERS), where('shopId','==', currentShopId));
+  const snap = await getDocs(customersQuery);
+  const now = new Date();
+  const in7Days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  
+  snap.docs.forEach(doc => {
+    const customer = doc.data();
+    const expiry = toDate(customer.expiry);
+    if (expiry && expiry <= in7Days && expiry > now) {
+      const daysLeft = Math.ceil((expiry - now) / (1000 * 60 * 60 * 24));
+      showNotification(`${customer.name}'s plan expires in ${daysLeft} days`, 'warning');
+      addNotificationToGrid('fas fa-exclamation-triangle', 'Plan Expiring', `${customer.name}'s plan expires in ${daysLeft} days`, 'warning');
+    }
+  });
+}
+
+async function addActivity(icon, text){
+  try {
+    await addDoc(collection(db, COL_ACTIVITY), {
+      icon,
+      text,
+      shopId: currentShopId,
+      createdAt: serverTimestamp()
+    });
+  } catch (e) {
+    console.error('Failed to add activity:', e);
+  }
+}
+
+// Helper to get cached collection data with shopId filter
+async function getCachedCollection(collectionName) {
+  const snap = await getDocs(query(collection(db, collectionName), where('shopId','==', currentShopId)));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+// Real-time notification system
+function showNotification(message, type = 'info') {
+  // Create notification container if it doesn't exist
+  let container = document.getElementById('notificationContainer');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'notificationContainer';
+    container.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 10000;
+      max-width: 400px;
+    `;
+    document.body.appendChild(container);
+  }
+
+  // Create notification element
+  const notification = document.createElement('div');
+  notification.style.cssText = `
+    background: ${type === 'success' ? '#10b981' : type === 'warning' ? '#f59e0b' : type === 'error' ? '#ef4444' : '#3b82f6'};
+    color: white;
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  `;
+
+  const icon = type === 'success' ? '✓' : type === 'warning' ? '⚠' : type === 'error' ? '✕' : 'ℹ';
+  notification.innerHTML = `
+    <span style="font-weight: bold;">${icon}</span>
+    <span>${message}</span>
+    <button onclick="this.parentElement.remove()" style="background: none; border: none; color: white; cursor: pointer; margin-left: auto;">×</button>
+  `;
+
+  container.appendChild(notification);
+
+  // Animate in
+  setTimeout(() => {
+    notification.style.transform = 'translateX(0)';
+  }, 10);
+
+  // Auto remove after 5 seconds
+  setTimeout(() => {
+    if (notification.parentElement) {
+      notification.style.transform = 'translateX(100%)';
+      setTimeout(() => notification.remove(), 300);
+    }
+  }, 5000);
+}
+
+// Add notification to the notifications grid
+function addNotificationToGrid(icon, title, message, type = 'info') {
+  const grid = document.getElementById('notificationsGrid');
+  if (!grid) return;
+
+  // Remove the "no notifications" placeholder if it exists
+  const placeholder = grid.querySelector('.notification-card[style*="text-align: center"]');
+  if (placeholder) {
+    placeholder.remove();
+  }
+
+  // Create notification card
+  const card = document.createElement('div');
+  card.className = 'notification-card';
+  card.style.cssText = `
+    display: flex;
+    align-items: center;
+    padding: 16px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    margin-bottom: 12px;
+    border-left: 4px solid ${type === 'success' ? '#10b981' : type === 'warning' ? '#f59e0b' : type === 'error' ? '#ef4444' : '#3b82f6'};
+  `;
+
+  card.innerHTML = `
+    <div class="notification-icon" style="margin-right: 12px; color: ${type === 'success' ? '#10b981' : type === 'warning' ? '#f59e0b' : type === 'error' ? '#ef4444' : '#3b82f6'};">
+      <i class="${icon}"></i>
+    </div>
+    <div class="notification-content" style="flex: 1;">
+      <h4 style="margin: 0 0 4px 0; font-size: 14px; font-weight: 600;">${title}</h4>
+      <p style="margin: 0 0 4px 0; color: #6b7280; font-size: 13px;">${message}</p>
+      <span class="notification-time" style="color: #9ca3af; font-size: 12px;">Just now</span>
+    </div>
+    <div class="notification-actions" style="margin-left: 12px;">
+      <button class="btn btn-sm btn-secondary" onclick="this.closest('.notification-card').remove(); updateNotificationBadge();">Dismiss</button>
+    </div>
+  `;
+
+  // Add to top of grid
+  grid.insertBefore(card, grid.firstChild);
+
+  // Update notification badge
+  updateNotificationBadge();
+}
+
+// Update notification badge count
+function updateNotificationBadge() {
+  const badge = document.getElementById('notificationBadge');
+  const grid = document.getElementById('notificationsGrid');
+  if (!badge || !grid) return;
+
+  const notifications = grid.querySelectorAll('.notification-card');
+  const count = notifications.length;
+  
+  if (count > 0) {
+    badge.textContent = count;
+    badge.style.display = 'inline-block';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+// Update AI insights container with real data
+function updateAIInsightsContainer(customers, plans, payments, atRisk, upsell, churned, retained, arpu, topPlan, planCounts) {
+  const container = document.getElementById('aiInsightsContainer');
+  if (!container) return;
+
+  // If no data, show empty state
+  if (customers.length === 0 && plans.length === 0) {
+    container.innerHTML = `
+      <h3>AI Insights</h3>
+      <div class="insight-card" style="text-align: center; padding: 40px;">
+        <div class="insight-icon" style="font-size: 48px; color: #d1d5db; margin-bottom: 16px;">
+          <i class="fas fa-robot"></i>
+        </div>
+        <div class="insight-content">
+          <h4 style="color: #6b7280; margin-bottom: 8px;">No insights yet</h4>
+          <p style="color: #9ca3af;">Add customers and plans to get AI-powered business insights and recommendations.</p>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  // Generate real insights based on actual data
+  const insights = [];
+  
+  // Churn Risk Alert
+  if (atRisk > 0) {
+    insights.push({
+      icon: 'fas fa-exclamation-triangle',
+      title: 'Churn Risk Alert',
+      description: `${atRisk} customer${atRisk === 1 ? '' : 's'} ${atRisk === 1 ? 'is' : 'are'} at high risk of churning in the next 30 days. Consider reaching out with retention offers.`,
+      type: 'warning'
+    });
+  }
+
+  // Upsell Opportunity
+  if (upsell > 0) {
+    const potentialRevenue = upsell * 50; // Rough estimate
+    insights.push({
+      icon: 'fas fa-trending-up',
+      title: 'Upsell Opportunity',
+      description: `${upsell} customer${upsell === 1 ? '' : 's'} on lower-tier plans could be upgraded. Potential revenue increase: ${formatCurrency(potentialRevenue)}/month.`,
+      type: 'success'
+    });
+  }
+
+  // Payment Reminder (customers with payments due in next 7 days)
+  const now = new Date();
+  const in7Days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const paymentsDue = customers.filter(c => {
+    const expiry = toDate(c.expiry);
+    return expiry && expiry >= now && expiry <= in7Days;
+  }).length;
+
+  if (paymentsDue > 0) {
+    insights.push({
+      icon: 'fas fa-calendar',
+      title: 'Payment Reminder',
+      description: `${paymentsDue} customer${paymentsDue === 1 ? '' : 's'} ${paymentsDue === 1 ? 'has' : 'have'} payments due in the next 7 days. Send automated reminders to improve collection rate.`,
+      type: 'info'
+    });
+  }
+
+  // If no specific insights, show general stats
+  if (insights.length === 0) {
+    insights.push({
+      icon: 'fas fa-chart-line',
+      title: 'Business Overview',
+      description: `You have ${customers.length} customers with ${plans.length} active plans. ARPU: ${formatCurrency(arpu)}. Keep up the great work!`,
+      type: 'info'
+    });
+  }
+
+  // Render insights
+  container.innerHTML = `
+    <h3>AI Insights</h3>
+    ${insights.map(insight => `
+      <div class="insight-card" style="border-left: 4px solid ${insight.type === 'warning' ? '#f59e0b' : insight.type === 'success' ? '#10b981' : '#3b82f6'};">
+        <div class="insight-icon" style="color: ${insight.type === 'warning' ? '#f59e0b' : insight.type === 'success' ? '#10b981' : '#3b82f6'};">
+          <i class="${insight.icon}"></i>
+        </div>
+        <div class="insight-content">
+          <h4>${insight.title}</h4>
+          <p>${insight.description}</p>
+        </div>
+      </div>
+    `).join('')}
+  `;
+}
+
+async function setupAIAssistant(){
   const input = document.getElementById('chatInput');
   const send = document.getElementById('sendMessage');
   const messages = document.getElementById('chatMessages');
@@ -137,14 +506,20 @@ function setupAIAssistant(){
     messages.scrollTop = messages.scrollHeight;
   };
 
-  // Seed onboarding suggestions
-  addBot(`<p>I can help you with:</p>
+  // Seed onboarding suggestions with real data
+  const [customers, plans] = await Promise.all([
+    getCachedCollection(COL_CUSTOMERS).catch(()=>[]),
+    getCachedCollection(COL_PLANS).catch(()=>[])
+  ]);
+  
+  addBot(`<p>Welcome! I can help you with:</p>
     <ul>
       <li>Adding customers and assigning plans</li>
       <li>Creating plans and pricing</li>
       <li>Revenue, churn and retention analytics</li>
       <li>Payment reminders and collections</li>
     </ul>
+    <p><strong>Current Status:</strong> ${customers.length} customers, ${plans.length} plans active</p>
     <p>${onboarding[0]}</p>`);
 
   const handle = async (text)=>{
@@ -160,6 +535,7 @@ function setupAIAssistant(){
       return;
     }
     if (/(analy[sz]e|analysis|report|suggest|insight)/.test(t)){
+      addBot('<p>Analyzing your real-time data...</p>');
       const html = await generateAISuggestionsHTML();
       addBot(html);
       return;
@@ -172,8 +548,15 @@ function setupAIAssistant(){
       addBot(`<p>Go to Plans → Create Plan. Include name, price, speed. The price drives billing in Payments.</p>`);
       return;
     }
-    // default: show suggestions prompt
-    addBot(`<p>I can generate tailored suggestions from your data. Type "analyze" to proceed.</p>`);
+    // default: show suggestions prompt with real data
+    const [customers, plans, payments] = await Promise.all([
+      getCachedCollection(COL_CUSTOMERS).catch(()=>[]),
+      getCachedCollection(COL_PLANS).catch(()=>[]),
+      getCachedCollection(COL_PAYMENTS).catch(()=>[])
+    ]);
+    const totalRevenue = payments.reduce((s,p)=> s + Number(p.amount||0), 0);
+    addBot(`<p>I can generate tailored suggestions from your live data. Type "analyze" for insights.</p>
+    <p><strong>Quick Stats:</strong> ${customers.length} customers, ${plans.length} plans, ${formatCurrency(totalRevenue)} total revenue</p>`);
   };
 
   send.addEventListener('click', async ()=>{
@@ -188,9 +571,9 @@ function setupAIAssistant(){
 
 async function generateAISuggestionsHTML(){
   const [paymentsSnap, customersSnap, plansSnap] = await Promise.all([
-    getDocs(collection(db, COL_PAYMENTS)),
-    getDocs(collection(db, COL_CUSTOMERS)),
-    getDocs(collection(db, COL_PLANS))
+    getDocs(query(collection(db, COL_PAYMENTS), where('shopId','==', currentShopId))),
+    getDocs(query(collection(db, COL_CUSTOMERS), where('shopId','==', currentShopId))),
+    getDocs(query(collection(db, COL_PLANS), where('shopId','==', currentShopId)))
   ]);
 
   // Aggregates
@@ -228,6 +611,9 @@ async function generateAISuggestionsHTML(){
   const upsell = activeCustomers.filter(c=>{
     const p = nameToPlan.get(c.plan); return Number(p?.price||0) < median;
   }).length;
+
+  // Update AI insights container with real data
+  updateAIInsightsContainer(customers, plans, payments, atRisk, upsell, churned, retained, arpu, topPlan, planCounts);
 
   return `
   <div>
@@ -436,6 +822,14 @@ function renderShopSelector(){
   sel.onchange = async ()=>{
     currentShopId = sel.value;
     localStorage.setItem('shopId', currentShopId);
+    
+    // Clean up old listeners
+    realtimeListeners.forEach(unsubscribe => unsubscribe());
+    realtimeListeners.clear();
+    
+    // Setup new listeners for the selected shop
+    setupRealtimeListeners();
+    
     await Promise.all([
       renderDashboard(), renderCustomers(), renderPlans(), renderPayments(), renderAnalytics(), renderMessagingStats()
     ]);
