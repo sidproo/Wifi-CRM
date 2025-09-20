@@ -47,6 +47,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (userNameEl) userNameEl.textContent = userName;
   }
   
+  // Setup logout button immediately as fallback
+  const logoutBtn = document.getElementById('logoutBtn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      console.log('Logout button clicked (fallback)');
+      try {
+        // Clean up real-time listeners
+        if (realtimeListeners) {
+          realtimeListeners.forEach(unsubscribe => unsubscribe());
+          realtimeListeners.clear();
+        }
+        console.log('Signing out...');
+        await signOut(auth);
+        console.log('Sign out successful, redirecting...');
+        window.location.href = 'auth.html';
+      } catch (e) {
+        console.error('Logout error:', e);
+        alert('Logout failed: ' + e.message);
+      }
+    });
+    console.log('Fallback logout event listener added');
+  }
+  
   // Fallback: auto-hide loader after 6s even if something stalls
   const fallbackTimer = setTimeout(hideLoadingScreen, 6000);
   try {
@@ -74,10 +98,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupSettingsHandlers();
     scheduleExpiryReminders();
     await setupAIAssistant();
-    renderShopSelector();
-    setupLogout();
+    await renderShopSelector();
     setupRealtimeListeners();
     setupRealtimeNotifications();
+    
+    // Setup logout after everything else is loaded
+    setTimeout(() => {
+      setupLogout();
+    }, 100);
   } catch (err) {
     console.error('Initialization error:', err);
     toast('Failed to load some data. Check console.');
@@ -155,19 +183,30 @@ async function renderDashboard() {
 
 function setupLogout(){
   const btn = document.getElementById('logoutBtn');
-  if (!btn) return;
-  btn.addEventListener('click', async ()=>{
+  console.log('Logout button found:', btn);
+  if (!btn) {
+    console.error('Logout button not found!');
+    return;
+  }
+  
+  btn.addEventListener('click', async (e)=>{
+    e.preventDefault();
+    console.log('Logout button clicked');
     try {
       // Clean up real-time listeners
       realtimeListeners.forEach(unsubscribe => unsubscribe());
       realtimeListeners.clear();
+      console.log('Signing out...');
       await signOut(auth);
+      console.log('Sign out successful, redirecting...');
       window.location.href = 'auth.html';
     } catch (e) {
-      toast('Logout failed');
-      console.error(e);
+      console.error('Logout error:', e);
+      toast('Logout failed: ' + e.message);
     }
   });
+  
+  console.log('Logout event listener added');
 }
 
 // Real-time listeners for live data updates
@@ -201,7 +240,7 @@ function setupRealtimeListeners(){
   realtimeListeners.set('payments', unsubscribePayments);
 
   // Listen to activity changes
-  const activityQuery = query(collection(db, COL_ACTIVITY), where('shopId','==', currentShopId), orderBy('createdAt', 'desc'), limit(10));
+  const activityQuery = query(collection(db, COL_ACTIVITY), where('shopId','==', currentShopId), limit(10));
   const unsubscribeActivity = onSnapshot(activityQuery, (snap) => {
     renderActivity();
   });
@@ -730,14 +769,24 @@ async function renderActivity() {
   const activityList = byId('activityList');
   if (!activityList) return;
   activityList.innerHTML = '';
-  const qSnap = await getDocs(query(collection(db, COL_ACTIVITY), orderBy('createdAt', 'desc'), limit(10)));
+  const qSnap = await getDocs(query(collection(db, COL_ACTIVITY), where('shopId','==', currentShopId), limit(50)));
   if (qSnap.empty) {
     activityList.innerHTML = `<div class="text-center" style="color:#000">No recent activity</div>`;
     return;
   }
+  
+  // Sort by createdAt in descending order (most recent first)
+  const activities = qSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => {
+      const aTime = a.createdAt?.toDate?.() || new Date(a.createdAt || 0);
+      const bTime = b.createdAt?.toDate?.() || new Date(b.createdAt || 0);
+      return bTime - aTime;
+    })
+    .slice(0, 10); // Take only the first 10 after sorting
+  
   const frag = document.createDocumentFragment();
-  qSnap.forEach(docSnap => {
-    const item = docSnap.data();
+  activities.forEach(activity => {
+    const item = activity;
     const div = document.createElement('div');
     div.className = 'activity-item';
     div.innerHTML = `
@@ -809,9 +858,17 @@ function renderChartsFromCollections(paymentsSnap, customersSnap) {
   }
 }
 
-function renderShopSelector(){
+async function renderShopSelector(){
   const headerRight = document.querySelector('.top-header .header-right');
   if (!headerRight) return;
+  
+  // Get current user
+  const user = auth.currentUser;
+  if (!user) {
+    console.error('No authenticated user found');
+    return;
+  }
+  
   let wrapper = document.getElementById('shopSelectorWrapper');
   if (!wrapper) {
     wrapper = document.createElement('div');
@@ -821,13 +878,26 @@ function renderShopSelector(){
     headerRight.insertBefore(wrapper, headerRight.firstChild);
   }
   const sel = document.getElementById('shopSelector');
-  getDocs(collection(db, COL_SHOPS)).then(snap => {
+  
+  try {
+    // Only get shops owned by the current user
+    const q = query(collection(db, COL_SHOPS), where('ownerUid', '==', user.uid));
+    const snap = await getDocs(q);
     let shops = snap.docs.map(d=>({ id:d.id, ...(d.data()||{}) }));
-    if (!shops.length) shops = [{ id:'default', name:'Default Shop' }];
+    
+    // If no shops found, create a default one or show current shop
+    if (!shops.length) {
+      shops = [{ id: currentShopId, name: localStorage.getItem('shopName') || 'My Shop' }];
+    }
+    
     sel.innerHTML = shops.map(s=>`<option value="${s.id}" ${s.id===currentShopId?'selected':''}>${s.name||s.id}</option>`).join('');
-  }).catch(()=>{
-    sel.innerHTML = `<option value="default" selected>Default Shop</option>`;
-  });
+  } catch (error) {
+    console.error('Error loading shops:', error);
+    // Fallback to current shop only
+    const shopName = localStorage.getItem('shopName') || 'My Shop';
+    sel.innerHTML = `<option value="${currentShopId}" selected>${shopName}</option>`;
+  }
+  
   sel.onchange = async ()=>{
     currentShopId = sel.value;
     localStorage.setItem('shopId', currentShopId);
@@ -1051,7 +1121,7 @@ async function renderTickets() {
   const tbody = byId('ticketsTbody');
   if (!tbody) return;
   tbody.innerHTML = '';
-  const snap = await getDocs(collection(db, COL_TICKETS));
+  const snap = await getDocs(query(collection(db, COL_TICKETS), where('shopId','==', currentShopId)));
   if (snap.empty) {
     tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:#000">No tickets</td></tr>`;
     return;
@@ -1091,7 +1161,7 @@ async function renderTickets() {
 async function renderMessagingStats() {
   const container = byId('messagingStats');
   if (!container) return;
-  const snap = await getDocs(collection(db, COL_CAMPAIGNS));
+  const snap = await getDocs(query(collection(db, COL_CAMPAIGNS), where('shopId','==', currentShopId)));
   let email = 0, sms = 0, whatsapp = 0;
   snap.forEach(d => {
     const c = d.data();
@@ -1114,6 +1184,7 @@ function setupMessagingForms() {
       const payload = serializeForm(form);
       await addDoc(collection(db, COL_CAMPAIGNS), {
         channel,
+        shopId: currentShopId,
         payload,
         count: Array.isArray(payload.recipients) ? payload.recipients.length : 1,
         createdAt: serverTimestamp(),
@@ -1222,12 +1293,12 @@ function setupCrudHandlers(){
 }
 
 async function fetchPlans(){
-  const snap = await getDocs(collection(db, COL_PLANS));
+  const snap = await getDocs(query(collection(db, COL_PLANS), where('shopId','==', currentShopId)));
   return snap.docs.map(d=>({ id: d.id, ...(d.data()||{}) }));
 }
 
 async function fetchCustomers(){
-  const snap = await getDocs(collection(db, COL_CUSTOMERS));
+  const snap = await getDocs(query(collection(db, COL_CUSTOMERS), where('shopId','==', currentShopId)));
   return snap.docs.map(d=>({ id: d.id, ...(d.data()||{}) }));
 }
 
@@ -1448,7 +1519,7 @@ function computeNextDueDate(plan){
 
 async function scheduleExpiryReminders() {
   // Find customers whose expiry is in 10 days
-  const snap = await getDocs(collection(db, COL_CUSTOMERS));
+  const snap = await getDocs(query(collection(db, COL_CUSTOMERS), where('shopId','==', currentShopId)));
   const now = new Date();
   const target = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 10);
   let count = 0;
@@ -1459,6 +1530,7 @@ async function scheduleExpiryReminders() {
     if (isSameDay(expiry, target)) {
       await addDoc(collection(db, COL_REMINDERS), {
         customerId: d.id,
+        shopId: currentShopId,
         name: c.name || '',
         channel: 'all',
         scheduledFor: expiry,

@@ -212,41 +212,23 @@ class OmniNetCRM {
 
 	// Firebase setup and data helpers
 	setupFirebase() {
-		try {
-			if (window.firebase && window.firebase.apps) {
-				const isInitialized = window.firebase.apps.length > 0;
-				if (!isInitialized) {
-					if (!window.FIREBASE_CONFIG) {
-						console.warn('FIREBASE_CONFIG not found on window. Firebase features will be disabled.');
-						return;
-					}
-					window.firebase.initializeApp(window.FIREBASE_CONFIG);
-				}
-				this.firebase = window.firebase;
-				this.firestore = this.firebase.firestore();
-				this.storage = this.firebase.storage ? this.firebase.storage() : null;
-			} else {
-				console.warn('Firebase SDK not detected. Include Firebase scripts to enable data features.');
-			}
-		} catch (err) {
-			console.error('Failed to initialize Firebase:', err);
-		}
+		// Firebase is now handled by app.js using the modular v9+ SDK
+		// This method is kept for compatibility but Firebase operations are handled elsewhere
+		console.log('Firebase initialization handled by app.js');
 	}
 
 	async fetchPlans(forceRefresh = false) {
-		if (this.cachedPlans && !forceRefresh) return this.cachedPlans;
-		if (!this.firestore) return [];
-		const snapshot = await this.firestore.collection('plans').orderBy('name').get();
-		this.cachedPlans = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-		return this.cachedPlans;
+		// Plans are now fetched by app.js using the modular Firebase SDK
+		// This method is kept for compatibility but returns empty array
+		console.log('Plan fetching handled by app.js');
+		return [];
 	}
 
 	async fetchCustomers(forceRefresh = false) {
-		if (this.cachedCustomers && !forceRefresh) return this.cachedCustomers;
-		if (!this.firestore) return [];
-		const snapshot = await this.firestore.collection('customers').orderBy('name').get();
-		this.cachedCustomers = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-		return this.cachedCustomers;
+		// Customers are now fetched by app.js using the modular Firebase SDK
+		// This method is kept for compatibility but returns empty array
+		console.log('Customer fetching handled by app.js');
+		return [];
 	}
 
 	async addCustomerRecord(customer) {
