@@ -38,6 +38,15 @@ let realtimeListeners = new Map(); // Track real-time listeners
 
 document.addEventListener('DOMContentLoaded', async () => {
   showApp();
+  
+  // Update user info from localStorage
+  const userName = localStorage.getItem('userName');
+  const shopName = localStorage.getItem('shopName');
+  if (userName) {
+    const userNameEl = document.getElementById('userName');
+    if (userNameEl) userNameEl.textContent = userName;
+  }
+  
   // Fallback: auto-hide loader after 6s even if something stalls
   const fallbackTimer = setTimeout(hideLoadingScreen, 6000);
   try {
